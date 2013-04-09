@@ -1,0 +1,9 @@
+---------------------------------------------------------------------
+Note about naming: its a constrained model, but since the constrained
+model is a generalization of the non-constrained one, we should not
+split the library into two separate "crf-chain2-tiers-constrained" 
+and "crf-chain2-tiers" libraries.
+
+Q: Do we lose some optimizations possibilities by doing that?
+That is, do we lose anything by using constrained implementation
+for the unconstrained model ?

@@ -1,0 +1,5 @@
+---------------------------------------------------------------------
+Idea: we should use Int16 and Int32 types when they consume plenty
+of memory (i.e. types which are a part of structures residing in
+memory).  Otherwise, plain Int should be used.  Check different
+solutions and their influence on the tagging performance.
