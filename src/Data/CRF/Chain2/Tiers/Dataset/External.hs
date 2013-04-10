@@ -43,9 +43,9 @@ mkProb =
     Prob . normalize . M.fromListWith (+) . filter ((>0).snd)
   where
     normalize dist 
-        | M.null dist  =
+        | M.null dist =
             error "mkProb: no elements with positive probability"
-        | otherwise     =
+        | otherwise   =
             let z = sum (M.elems dist)
             in  fmap (/z) dist
 
