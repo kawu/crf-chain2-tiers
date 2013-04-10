@@ -1,4 +1,4 @@
-module Data.CRF.Chain1.Constrained.Dataset.Codec
+module Data.CRF.Chain2.Tiers.Dataset.Codec
 ( Codec
 , CodecM
 , obMax
@@ -16,7 +16,7 @@ module Data.CRF.Chain1.Constrained.Dataset.Codec
 , encodeSentL'Cn
 , encodeSentL
 
-, encodeLabels
+-- , encodeLabels
 , decodeLabel
 , decodeLabels
 
@@ -24,23 +24,29 @@ module Data.CRF.Chain1.Constrained.Dataset.Codec
 , encodeData
 , encodeDataL
 , unJust
-, unJusts
 ) where
 
+
 import Control.Applicative ((<$>), (<*>), pure)
+import Control.Comonad.Trans.Store (store)
 import Data.Maybe (catMaybes, fromJust)
-import Data.Lens.Common (fstLens, sndLens)
+import Data.Lens.Common (Lens(..), fstLens)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Vector as V
 import qualified Control.Monad.Codec as C
 
-import Data.CRF.Chain1.Constrained.Dataset.Internal
-import Data.CRF.Chain1.Constrained.Dataset.External
+import Data.CRF.Chain2.Tiers.Dataset.Internal
+import Data.CRF.Chain2.Tiers.Dataset.External
 
--- | A codec.  The first component is used to encode observations
--- of type a, the second one is used to encode labels of type b.
-type Codec a b = (C.AtomCodec a, C.AtomCodec (Maybe b))
+
+-- | Codec internal data.  The first component is used to
+-- encode observations of type a, the second one is used to
+-- encode labels of type [b].
+type Codec a b =
+    ( C.AtomCodec a
+    , V.Vector (C.AtomCodec (Maybe b)) )
+
 
 -- | The maximum internal observation included in the codec.
 obMax :: Codec a b -> Ob
@@ -48,47 +54,97 @@ obMax =
     let idMax m = M.size m - 1
     in  Ob . idMax . C.to . fst
 
--- | The maximum internal label included in the codec.
-lbMax :: Codec a b -> Lb
+
+-- | The maximum internal labels included in the codec.
+lbMax :: Codec a b -> [Lb]
 lbMax =
     let idMax m = M.size m - 1
-    in  Lb . idMax . C.to . snd
+    in  map (Lb . idMax . C.to) . V.toList . snd
 
--- | The empty codec.  The label part is initialized with Nothing
--- member, which represents unknown labels.  It is taken on account
--- in the model implementation because it is assigned to the
+
+obLens :: Lens (a, b) a
+obLens = fstLens
+
+
+lbLens :: Int -> Lens (a, V.Vector b) b
+lbLens k = Lens $ \(a, b) -> store
+    (\x -> (a, b V.// [(k, x)]))
+    (b V.! k)
+
+
+--------------------------------------
+-- Core
+--------------------------------------
+
+
+-- | The empty codec.  The label parts are initialized with Nothing
+-- members, which represent unknown labels.  It is taken in the model
+-- implementation on acount because it is assigned to the
 -- lowest label code and the model assumes that the set of labels
 -- is of the {0, ..., 'lbMax'} form.
-empty :: Ord b => Codec a b
-empty =
+--
+-- Codec depends on the number of layers.
+empty :: Ord b => Int -> Codec a b
+empty n =
     let withNo = C.execCodec C.empty (C.encode C.idLens Nothing)
-    in  (C.empty, withNo)
+    in  (C.empty, V.replicate n withNo)
 
--- | Type synonym for the codec monad.  It is important to notice that by a
--- codec we denote here a structure of two 'C.AtomCodec's while in the
--- monad-codec package it denotes a monad.
+
+-- | Type synonym for the codec monad.
 type CodecM a b c = C.Codec (Codec a b) c
+
 
 -- | Encode the observation and update the codec (only in the encoding
 -- direction).
 encodeObU :: Ord a => a -> CodecM a b Ob
-encodeObU = fmap Ob . C.encode' fstLens
+encodeObU = fmap Ob . C.encode' obLens
+
 
 -- | Encode the observation and do *not* update the codec.
 encodeObN :: Ord a => a -> CodecM a b (Maybe Ob)
-encodeObN = fmap (fmap Ob) . C.maybeEncode fstLens
+encodeObN = fmap (fmap Ob) . C.maybeEncode obLens
+
 
 -- | Encode the label and update the codec.
-encodeLbU :: Ord b => b -> CodecM a b Lb
-encodeLbU = fmap Lb . C.encode sndLens . Just
+encodeLbU :: Ord b => [b] -> CodecM a b Cb
+encodeLbU xs = mkCb <$> sequence
+    [ Lb <$> C.encode (lbLens k) (Just x)
+    | (x, k) <- zip xs [0..] ]
+
 
 -- | Encode the label and do *not* update the codec.
-encodeLbN :: Ord b => b -> CodecM a b Lb
-encodeLbN x = do
-    my <- C.maybeEncode sndLens (Just x)
-    Lb <$> ( case my of
-        Just y  -> return y
-        Nothing -> fromJust <$> C.maybeEncode sndLens Nothing )
+-- In case the label is not a member of the codec,
+-- return the label code assigned to Nothing label.
+encodeLbN :: Ord b => [b] -> CodecM a b Cb
+encodeLbN xs =
+    let encode lens x = C.maybeEncode lens (Just x) >>= \mx -> case mx of
+            Just x' -> return x'
+            Nothing -> fromJust <$> C.maybeEncode lens Nothing
+    in  mkCb <$> sequence
+            [ Lb <$> encode (lbLens k) x
+            | (x, k) <- zip xs [0..] ]
+
+
+-- | Decode the label within the codec monad.
+decodeLbC :: Ord b => Cb -> CodecM a b (Maybe [b])
+decodeLbC xs = sequence <$> sequence
+    [ C.decode (lbLens k) (unLb x)
+    | (x, k) <- zip (unCb xs) [0..] ]
+
+
+-- | Is label a member of the codec?
+hasLabel :: Ord b => Codec a b -> [b] -> Bool
+hasLabel cdc xs = and
+        [ M.member
+            (Just x)
+            (C.to $ snd cdc V.! k)
+        | (x, k) <- zip xs [0..] ]
+
+
+--------------------------------------
+-- On top of core
+--------------------------------------
+
 
 -- | Encode the labeled word and update the codec.
 encodeWordL'Cu :: (Ord a, Ord b) => WordL a b -> CodecM a b (X, Y)
@@ -139,9 +195,9 @@ encodeSentL'Cn sent = do
     ps <- mapM (encodeWordL'Cn) sent
     return (V.fromList (map fst ps), V.fromList (map snd ps))
 
--- | Encode labels into an ascending vector of distinct label codes.
-encodeLabels :: Ord b => Codec a b -> [b] -> AVec Lb
-encodeLabels codec = fromList . C.evalCodec codec . mapM encodeLbN
+-- -- | Encode labels into an ascending vector of distinct label codes.
+-- encodeLabels :: Ord b => Codec a b -> [b] -> AVec Lb
+-- encodeLabels codec = mkAVec . C.evalCodec codec . mapM encodeLbN
 
 -- | Encode the labeled sentence with the given codec.  Substitute the
 -- default label for any label not present in the codec.
@@ -162,10 +218,10 @@ encodeSent codec = C.evalCodec codec . encodeSent'Cn
 
 -- | Create the codec on the basis of the labeled dataset, return the
 -- resultant codec and the encoded dataset.
-mkCodec :: (Ord a, Ord b) => [SentL a b] -> (Codec a b, [(Xs, Ys)])
-mkCodec
+mkCodec :: (Ord a, Ord b) => Int -> [SentL a b] -> (Codec a b, [(Xs, Ys)])
+mkCodec n
     = swap
-    . C.runCodec empty
+    . C.runCodec (empty n)
     . mapM encodeSentL'Cu
   where
     swap (x, y) = (y, x)
@@ -180,21 +236,16 @@ encodeData :: (Ord a, Ord b) => Codec a b -> [Sent a b] -> [Xs]
 encodeData codec = map (encodeSent codec)
 
 -- | Decode the label.
-decodeLabel :: Ord b => Codec a b -> Lb -> Maybe b
-decodeLabel codec x = C.evalCodec codec $ C.decode sndLens (unLb x)
+decodeLabel :: Ord b => Codec a b -> Cb -> Maybe [b]
+decodeLabel codec = C.evalCodec codec . decodeLbC
 
 -- | Decode the sequence of labels.
-decodeLabels :: Ord b => Codec a b -> [Lb] -> [Maybe b]
-decodeLabels codec xs = C.evalCodec codec $
-    sequence [C.decode sndLens (unLb x) | x <- xs]
-
-hasLabel :: Ord b => Codec a b -> b -> Bool
-hasLabel codec x = M.member (Just x) (C.to $ snd codec)
-{-# INLINE hasLabel #-}
+decodeLabels :: Ord b => Codec a b -> [Cb] -> [Maybe [b]]
+decodeLabels codec = C.evalCodec codec . mapM decodeLbC
 
 -- | Return the label when 'Just' or one of the unknown values
 -- when 'Nothing'.
-unJust :: Ord b => Codec a b -> Word a b -> Maybe b -> b
+unJust :: Ord b => Codec a b -> Word a b -> Maybe [b] -> [b]
 unJust _ _ (Just x) = x
 unJust codec word Nothing = case allUnk of
     (x:_)   -> x
@@ -202,12 +253,12 @@ unJust codec word Nothing = case allUnk of
   where
     allUnk = filter (not . hasLabel codec) (S.toList $ lbs word)
 
--- | Replace 'Nothing' labels with all unknown labels from
--- the set of potential interpretations.
-unJusts :: Ord b => Codec a b -> Word a b -> [Maybe b] -> [b]
-unJusts codec word xs =
-    concatMap deJust xs
-  where
-    allUnk = filter (not . hasLabel codec) (S.toList $ lbs word)
-    deJust (Just x) = [x]
-    deJust Nothing  = allUnk
+-- -- | Replace 'Nothing' labels with all unknown labels from
+-- -- the set of potential interpretations.
+-- unJusts :: Ord b => Codec a b -> Word a b -> [Maybe b] -> [b]
+-- unJusts codec word xs =
+--     concatMap deJust xs
+--   where
+--     allUnk = filter (not . hasLabel codec) (S.toList $ lbs word)
+--     deJust (Just x) = [x]
+--     deJust Nothing  = allUnk

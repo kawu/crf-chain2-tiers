@@ -9,8 +9,13 @@ module Data.CRF.Chain2.Tiers.Dataset.Internal
 -- * Basic types
   Ob (..)
 , Lb (..)
-, LbIx
+, CbIx
 , FeatIx (..)
+
+-- * Complex label
+, Cb (..)
+, mkCb
+, unCb
 
 -- * Input element (word)
 , X (_unX, _unR)
@@ -47,6 +52,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Generic.Base as G
 import qualified Data.Vector.Generic.Mutable as G
+-- import qualified Data.Primitive.ByteArray as BA
 
 
 ----------------------------------------------------------------
@@ -60,15 +66,14 @@ newtype Ob = Ob { unOb :: Int }
              , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
 
 
--- | A label.
+-- | An atomic label.
 newtype Lb = Lb { unLb :: Int }
     deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
              , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
--- 	         , Num, Ix )
 
 
 -- | An index of the label.
-type LbIx = Int
+type CbIx = Int
 
 
 -- | A feature index.  To every model feature a unique index is assigned.
@@ -78,17 +83,45 @@ newtype FeatIx = FeatIx { unFeatIx :: Int }
 
 
 ----------------------------------------------------------------
+-- Complex label
+----------------------------------------------------------------
+
+
+-- TODO: Do we gain anything by representing the
+-- complex label with a byte array?  Complex labels
+-- should not be directly stored in a model, so if
+-- there is something to gain here, its not obvious.
+
+
+-- -- | A complex label is an array of atomic labels.
+-- newtype Cb = Cb { unCb :: BA.ByteArray }
+
+
+-- | A complex label is a vector of atomic labels.
+newtype Cb = Cb { _unCb :: U.Vector Lb }
+    deriving (Show, Eq, Ord)
+
+
+mkCb :: [Lb] -> Cb
+mkCb = Cb . U.fromList
+
+
+unCb :: Cb -> [Lb]
+unCb = U.toList . _unCb
+
+
+----------------------------------------------------------------
 -- Internal dataset representation
 ----------------------------------------------------------------
 
 
--- | A word represented by a list of its observations
+-- | A word is represented by a list of its observations
 -- and a list of its potential label interpretations.
 data X = X {
-    -- | A vector of observations.
-      _unX :: AVec Ob
+    -- | A set of observations.
+      _unX :: U.Vector Ob
     -- | A vector of potential labels.
-    , _unR :: AVec Lb }
+    , _unR :: V.Vector Cb }
     deriving (Show, Eq, Ord)
 
 
@@ -97,38 +130,38 @@ type Xs = V.Vector X
 
 
 -- | X constructor.
-mkX :: [Ob] -> [Lb] -> X
-mkX x r  = X (mkAVec x) (mkAVec r)
+mkX :: [Ob] -> [Cb] -> X
+mkX x r = X (U.fromList x) (V.fromList r)
 {-# INLINE mkX #-}
 
 
 -- | List of observations.
 unX :: X -> [Ob]
-unX = V.toList . unAVec . _unX
+unX = U.toList . _unX
 {-# INLINE unX #-}
 
 
 -- | List of potential labels.
-unR :: X -> [Lb]
-unR = V.toList . unAVec . _unR
+unR :: X -> [Cb]
+unR = V.toList . _unR
 {-# INLINE unR #-}
 
 
 -- | Vector of chosen labels together with
 -- corresponding probabilities.
-newtype Y = Y { _unY :: AVec2 Lb Double }
+newtype Y = Y { _unY :: V.Vector (Cb, Double) }
     deriving (Show, Eq, Ord)
 
 
 -- | Y constructor.
-mkY :: [(Lb, Double)] -> Y
-mkY = Y . mkAVec2
+mkY :: [(Cb, Double)] -> Y
+mkY = Y . V.fromList
 {-# INLINE mkY #-}
 
 
 -- | Y deconstructor symetric to mkY.
-unY :: Y -> [(Lb, Double)]
-unY = V.toList . unAVec2 . _unY
+unY :: Y -> [(Cb, Double)]
+unY = V.toList . _unY
 {-# INLINE unY #-}
 
 
@@ -137,30 +170,30 @@ type Ys = V.Vector Y
 
 
 -- | Potential label at the given position.
-lbAt :: X -> LbIx -> Lb
-lbAt x = (unAVec (_unR x) V.!)
+lbAt :: X -> CbIx -> Cb
+lbAt x = (_unR x V.!)
 {-# INLINE lbAt #-}
 
 
-lbVec :: Xs -> Int -> AVec Lb
+lbVec :: Xs -> Int -> V.Vector Cb
 lbVec xs = _unR . (xs V.!)
 {-# INLINE lbVec #-}
 
 
 -- | Number of potential labels at the given position of the sentence.
 lbNumI :: Xs -> Int -> Int
-lbNumI xs = V.length . unAVec . lbVec xs
+lbNumI xs = V.length . lbVec xs
 {-# INLINE lbNumI #-}
 
 
 -- | Potential label at the given position and at the given index.
-lbOnI :: Xs -> Int -> LbIx -> Lb
-lbOnI xs = (V.!) . unAVec . lbVec xs
+lbOnI :: Xs -> Int -> CbIx -> Cb
+lbOnI xs = (V.!) . lbVec xs
 {-# INLINE lbOnI #-}
 
 
 -- | List of label indices at the given position.
-lbIxsI :: Xs -> Int -> [LbIx]
+lbIxsI :: Xs -> Int -> [CbIx]
 lbIxsI xs i = [0 .. lbNum xs i - 1]
 {-# INLINE lbIxsI #-}
 
@@ -178,7 +211,7 @@ lbNum xs i
 
 -- | Potential label at the given position and at the given index.
 -- Return Nothing for positions outside the domain.
-lbOn :: Xs -> Int -> LbIx -> Maybe Lb
+lbOn :: Xs -> Int -> CbIx -> Maybe Cb
 lbOn xs i
     | i < 0 || i >= n   = const Nothing
     | otherwise         = Just . lbOnI xs i
@@ -189,7 +222,7 @@ lbOn xs i
 
 -- | List of label indices at the given position.  Function extended to
 -- indices outside the positions' domain.
-lbIxs :: Xs -> Int -> [LbIx]
+lbIxs :: Xs -> Int -> [CbIx]
 lbIxs xs i
     | i < 0 || i >= n   = [0]
     | otherwise         = lbIxsI xs i

@@ -24,15 +24,17 @@ library
       , vector
       , binary
       , vector-binary
+      , monad-codec >= 0.2 && < 0.3
+      , data-lens
+      , comonad-transformers
 --       , logfloat
 --       , parallel
---       , monad-codec >= 0.2 && < 0.3
---       , data-lens
---       , comonad-transformers
 --       , sgd >= 0.2.2 && < 0.3
 
     exposed-modules:
         Data.CRF.Chain2.Tiers.Dataset.Internal
+      , Data.CRF.Chain2.Tiers.Dataset.External
+      , Data.CRF.Chain2.Tiers.Dataset.Codec
 
     ghc-options: -Wall -O2
 

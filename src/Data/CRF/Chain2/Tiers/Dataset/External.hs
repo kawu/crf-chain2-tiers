@@ -1,6 +1,8 @@
-module Data.CRF.Chain1.Constrained.Dataset.External
-( Word (..)
-, unknown
+-- | External data representation.
+
+module Data.CRF.Chain2.Tiers.Dataset.External
+( Word (obs, lbs)
+, mkWord
 , Sent
 , Prob (unProb)
 , mkProb
@@ -11,21 +13,20 @@ module Data.CRF.Chain1.Constrained.Dataset.External
 import qualified Data.Set as S
 import qualified Data.Map as M
 
--- | A Word is represented by a set of observations
--- and a set of potential interpretation labels.
--- When the set of potential labels is empty the word
--- is considered to be unknown and the default potential
--- set is used in its place.
-data Word a b = Word
-    { obs   :: S.Set a  -- ^ The set of observations
-    , lbs   :: S.Set b  -- ^ The set of potential interpretations.
-    } deriving (Show, Eq, Ord)
+-- | A word consists of a set of observations and a set of potential labels.
+data Word a b = Word {
+    -- | Set of observations.
+      obs   :: S.Set a
+    -- | Non-empty set of potential labels.
+    , lbs   :: S.Set [b] }
+    deriving (Show, Eq, Ord)
 
--- | The word is considered to be unknown when the set of potential
--- labels is empty.
-unknown :: Word a b -> Bool
-unknown word = S.size (lbs word) == 0
-{-# INLINE unknown #-}
+-- | A word constructor which checks non-emptiness of the potential
+-- set of labels.
+mkWord :: S.Set a -> S.Set [b] -> Word a b
+mkWord _obs _lbs
+    | S.null _lbs   = error "mkWord: empty set of potential labels"
+    | otherwise     = Word _obs _lbs
 
 -- | A sentence of words.
 type Sent a b = [Word a b]
@@ -52,7 +53,7 @@ mkProb =
 -- defined over labels.  We assume that every label from the distribution
 -- domain is a member of the set of potential labels corresponding to the
 -- word.  TODO: Ensure the assumption using the smart constructor.
-type WordL a b = (Word a b, Prob b)
+type WordL a b = (Word a b, Prob [b])
 
 -- | A sentence of labeled words.
 type SentL a b = [WordL a b]
