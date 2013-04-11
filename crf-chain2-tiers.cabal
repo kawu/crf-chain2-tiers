@@ -28,7 +28,7 @@ library
       , data-lens
       , comonad-transformers
       , logfloat
---       , parallel
+      , parallel
 --       , sgd >= 0.2.2 && < 0.3
 
     exposed-modules:
@@ -39,6 +39,12 @@ library
 --       , Data.CRF.Chain2.Tiers.Feature.Hidden
 --       , Data.CRF.Chain2.Tiers.Feature.Present
       , Data.CRF.Chain2.Tiers.Model
+      , Data.CRF.Chain2.Tiers.Inference
+
+    other-modules:
+        Data.CRF.Chain2.Tiers.Util
+      , Data.CRF.Chain2.Tiers.DP
+        
 
     ghc-options: -Wall -O2
 
