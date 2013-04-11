@@ -45,6 +45,7 @@ module Data.CRF.Chain2.Tiers.Dataset.Internal
 
 
 import           Data.Binary (Binary)
+import           Data.Ix (Ix)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Array.Unboxed as A
@@ -69,7 +70,8 @@ newtype Ob = Ob { unOb :: Int }
 -- | An atomic label.
 newtype Lb = Lb { unLb :: Int }
     deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
-             , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
+             , G.Vector U.Vector, G.MVector U.MVector, U.Unbox
+             , Num, Ix)
 
 
 -- | An index of the label.

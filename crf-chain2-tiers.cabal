@@ -38,6 +38,7 @@ library
       , Data.CRF.Chain2.Tiers.Feature
       , Data.CRF.Chain2.Tiers.Feature.Hidden
       , Data.CRF.Chain2.Tiers.Feature.Present
+      , Data.CRF.Chain2.Tiers.Model
 
     ghc-options: -Wall -O2
 
