@@ -20,23 +20,17 @@ import Data.CRF.Chain2.Tiers.Feature
 
 
 -- | Hidden observation features for a given word.
-oFeats :: X -> [Feat]
-oFeats w =
+obFeats :: Xs -> Int -> [Feat]
+obFeats xs k =
     [ OFeat o x i
-    | cx       <- unR w
-    , o        <- unX w
+    | cx       <- unR (xs V.! k)
+    , o        <- unX (xs V.! k)
     , (x, i)   <- zip (unCb cx) [0..] ]
 
 
--- | Hidden observation features which can be constructed
--- based on the dataset.
-hiddenOFeats :: (Xs, b) -> [Feat]
-hiddenOFeats = concatMap oFeats . V.toList . fst
-
-
 -- | Hidden transition features for a given position.
-tFeats :: Xs -> Int -> [Feat]
-tFeats xs k
+trFeats :: Xs -> Int -> [Feat]
+trFeats xs k
     | k > 1     =
         [ TFeat3 x y z i
         | cx <- unR (xs V.! k)
@@ -56,12 +50,16 @@ tFeats xs k
         error "hiddenTFeats: sentence position negative"
 
 
--- | Hidden transition features which can be constructed
--- based on the dataset.
+-- | Hidden observation features in the given dataset element.
+hiddenOFeats :: (Xs, b) -> [Feat]
+hiddenOFeats (xs, _) = concatMap (obFeats xs) [0 .. V.length xs - 1]
+
+
+-- | Hidden transition features in the given dataset element.
 hiddenTFeats :: (Xs, b) -> [Feat]
-hiddenTFeats (xs, _) = concatMap (tFeats xs) [0 .. V.length xs - 1]
+hiddenTFeats (xs, _) = concatMap (trFeats xs) [0 .. V.length xs - 1]
 
 
--- | Hidden features of both types.
+-- | Hidden features of both types in the given dataset element.
 hiddenFeats :: (Xs, b) -> [Feat]
 hiddenFeats e = hiddenOFeats e ++ hiddenTFeats e

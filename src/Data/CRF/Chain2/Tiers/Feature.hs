@@ -1,9 +1,8 @@
 module Data.CRF.Chain2.Tiers.Feature
 ( Feat (..)
--- , isSFeat
--- , isTFeat
--- , isOFeat
-, featuresIn
+, probOFeats
+, probTFeats
+, probFeats
 ) where
 
 import           Data.Binary (Binary, put, get, putWord8, getWord8)
@@ -49,23 +48,13 @@ instance Binary Feat where
         _   -> error "get feature: unknown code"
 
 
--- -- | Is it a 'SFeature'?
--- isSFeat :: Feature -> Bool
--- isSFeat (SFeature _) = True
--- isSFeat _            = False
--- {-# INLINE isSFeat #-}
--- 
--- -- | Is it an 'OFeature'?
--- isOFeat :: Feature -> Bool
--- isOFeat (OFeature _ _) = True
--- isOFeat _              = False
--- {-# INLINE isOFeat #-}
--- 
--- -- | Is it a 'TFeature'?
--- isTFeat :: Feature -> Bool
--- isTFeat (TFeature _ _) = True
--- isTFeat _              = False
--- {-# INLINE isTFeat #-}
+-- | Observation features with assigned probabilities for a given position.
+obFeats :: Xs -> Ys -> Int -> [(Feat, L.LogFloat)]
+obFeats xs ys k =
+    [ (OFeat o x i, L.logFloat px)
+    | (cx, px) <- unY (ys V.! k)
+    , o        <- unX (xs V.! k)
+    , (x, i)   <- zip (unCb cx) [0..] ]
 
 
 -- | Transition features with assigned probabilities for given position.
@@ -90,18 +79,17 @@ trFeats ys k
     | otherwise =
         error "trFeats: sentence position negative"
 
--- | Observation features with assigned probabilities for a given position.
-obFeats :: Xs -> Ys -> Int -> [(Feat, L.LogFloat)]
-obFeats xs ys k =
-    [ (OFeat o x i, L.logFloat px)
-    | (cx, px) <- unY (ys V.! k)
-    , o        <- unX (xs V.! k)
-    , (x, i)   <- zip (unCb cx) [0..] ]
 
--- | All features with assigned probabilities for given position.
-features :: Xs -> Ys -> Int -> [(Feat, L.LogFloat)]
-features xs ys k = trFeats ys k ++ obFeats xs ys k
+-- | Observation features with probabilities in the given sentence.
+probOFeats :: Xs -> Ys -> [(Feat, L.LogFloat)]
+probOFeats xs ys = concatMap (obFeats xs ys) [0 .. V.length xs - 1]
 
--- | All features with assigned probabilities in given labeled sentence.
-featuresIn :: Xs -> Ys -> [(Feat, L.LogFloat)]
-featuresIn xs ys = concatMap (features xs ys) [0 .. V.length xs - 1]
+
+-- | Transition features with probabilities in the given sentence.
+probTFeats :: Ys -> [(Feat, L.LogFloat)]
+probTFeats ys = concatMap (trFeats ys) [0 .. V.length ys - 1]
+
+
+-- | Hidden features of both types with probabilities in the given sentence.
+probFeats :: Xs -> Ys -> [(Feat, L.LogFloat)]
+probFeats xs ys = probOFeats xs ys ++ probTFeats ys
