@@ -6,10 +6,12 @@
 
 
 module Data.CRF.Chain2.Tiers.Model
-( IModel (..)
+( Model (..)
 , mkModel
 , phi
 , index
+, onWord
+, onTransition
 ) where
 
 
@@ -35,6 +37,11 @@ import           Data.CRF.Chain2.Tiers.Feature
 dummy :: FeatIx
 dummy = FeatIx (-1)
 {-# INLINE dummy #-}
+
+
+----------------------------------------------------
+-- (Feature -> FeatIx) map
+----------------------------------------------------
 
 
 -- | Transition map restricted to a particular tagging layer.
@@ -98,62 +105,60 @@ m !? x = if inRange (A.bounds m) x
 {-# INLINE (!?) #-}
 
 
+----------------------------------------------------
+-- Internal model
+----------------------------------------------------
+
+
 -- | Internal model data.
-data IModel = IModel
+data Model = Model
     { values        :: U.Vector Double
     , ixMap         :: FeatMap }
 
 
-instance Binary IModel where
-    put IModel{..} = put values >> put ixMap
-    get = IModel <$> get <*> get
+instance Binary Model where
+    put Model{..} = put values >> put ixMap
+    get = Model <$> get <*> get
 
 
 -- | Construct model from a dataset.
-mkModel
-    :: ((Xs, Ys) -> [Feat]) -- ^ Feature selection
-    -> [(Xs, Ys)]           -- ^ Dataset
-    -> IModel
-mkModel ftSel dataset = IModel
+mkModel :: FeatSel -> [(Xs, Ys)] -> Model
+mkModel ftSel dataset = Model
     { values    = U.replicate (S.size fs) 0.0 
     , ixMap     =
         let featIxs = map FeatIx [0..]
             featLst = S.toList fs
         in  mkFeatMap (zip featLst featIxs) }
   where
-    fs = S.fromList $ concatMap ftSel dataset
+    fs = S.fromList $ concatMap (uncurry ftSel) dataset
 
 
 -- | Potential assigned to the feature -- exponential of the
 -- corresonding parameter.
-phi :: IModel -> Feat -> L.LogFloat
-phi IModel{..} ft = case featIndex ft ixMap of
+phi :: Model -> Feat -> L.LogFloat
+phi Model{..} ft = case featIndex ft ixMap of
     Just ix -> L.logToLogFloat (values U.! unFeatIx ix)
     Nothing -> L.logToLogFloat (0 :: Float)
 {-# INLINE phi #-}
 
 
 -- | Index of a feature.
-index :: IModel -> Feat -> Maybe FeatIx
-index IModel{..} ft = featIndex ft ixMap
+index :: Model -> Feat -> Maybe FeatIx
+index Model{..} ft = featIndex ft ixMap
 {-# INLINE index #-}
 
 
--- -- | Observation features 
--- obFeatsOn :: Xs o t -> Int -> LbIx -> [f]
--- obFeatsOn featGen xs i u = concat
---     [ feats ob e
---     | e  <- lbs
---     , ob <- unX (xs V.! i) ]
---   where 
---     feats   = obFeats featGen
---     lbs     = maybeToList (lbOn xs i u)
--- {-# INLINE obFeatsOn #-}
--- 
--- 
--- -- | Word-level potential on a given position and a
--- -- given label (identified by index).
--- onWord :: IModel -> Xs -> Int -> LbIx -> L.LogFloat
--- onWord crf xs i u =
---     product . map (phi crf) $ obFeatsOn (featGen crf) xs i u
--- {-# INLINE onWord #-}
+-- | Observation potential on a given position and a
+-- given label (identified by index).
+onWord :: Model -> Xs -> Int -> CbIx -> L.LogFloat
+onWord crf xs i u =
+    product . map (phi crf) $ obFeatsOn xs i u
+{-# INLINE onWord #-}
+
+
+-- | Transition potential on a given position and a
+-- given labels (identified by indexes).
+onTransition :: Model -> Xs -> Int -> CbIx -> CbIx -> CbIx -> L.LogFloat
+onTransition crf xs i u w v =
+    product . map (phi crf) $ trFeatsOn xs i u w v
+{-# INLINE onTransition #-}

@@ -1,17 +1,40 @@
 module Data.CRF.Chain2.Tiers.Feature
-( Feat (..)
-, probOFeats
-, probTFeats
-, probFeats
+(
+-- * Feature
+  Feat (..)
+
+-- * Feature generation
+, obFeats
+, trFeats1
+, trFeats2
+, trFeats3
+
+-- * Feature extraction
+, presentFeats
+, hiddenFeats
+, obFeatsOn
+, trFeatsOn
+
+-- * Feature selection
+, FeatSel
+, selectPresent
+, selectHidden
 ) where
 
-import           Data.Binary (Binary, put, get, putWord8, getWord8)
+
 import           Control.Applicative ((<*>), (<$>))
+import           Data.Maybe (maybeToList)
 import           Data.List (zip4)
+import           Data.Binary (Binary, put, get, putWord8, getWord8)
 import qualified Data.Vector as V
 import qualified Data.Number.LogFloat as L
 
 import Data.CRF.Chain2.Tiers.Dataset.Internal
+
+
+----------------------------------------------------
+-- Feature
+----------------------------------------------------
 
 
 -- | Feature.
@@ -48,48 +71,128 @@ instance Binary Feat where
         _   -> error "get feature: unknown code"
 
 
--- | Observation features with assigned probabilities for a given position.
-obFeats :: Xs -> Ys -> Int -> [(Feat, L.LogFloat)]
-obFeats xs ys k =
-    [ (OFeat o x i, L.logFloat px)
-    | (cx, px) <- unY (ys V.! k)
-    , o        <- unX (xs V.! k)
-    , (x, i)   <- zip (unCb cx) [0..] ]
+----------------------------------------------------
+-- Features generation
+----------------------------------------------------
 
 
--- | Transition features with assigned probabilities for given position.
-trFeats :: Ys -> Int -> [(Feat, L.LogFloat)]
-trFeats ys k
-    | k > 1     =
-        [ ( TFeat3 x y z i
-          , L.logFloat px * L.logFloat py * L.logFloat pz )
-        | (cx, px) <- unY (ys V.! k)
-        , (cy, py) <- unY (ys V.! (k - 1))
-        , (cz, pz) <- unY (ys V.! (k - 2))
-        , (x, y, z, i) <- zip4 (unCb cx) (unCb cy) (unCb cz) [0..] ]
-    | k == 1    =
-        [ (TFeat2 x y i, L.logFloat px * L.logFloat py)
-        | (cx, px) <- unY (ys V.! 1)
-        , (cy, py) <- unY (ys V.! 0)
-        , (x, y, i) <- zip3 (unCb cx) (unCb cy) [0..] ]
-    | k == 0    =
-        [ (TFeat1 x i, L.logFloat px)
-        | (cx, px) <- unY (ys V.! 0)
-        , (x, i) <- zip (unCb cx) [0..] ]
-    | otherwise =
-        error "trFeats: sentence position negative"
+obFeats :: Ob -> Cb -> [Feat]
+obFeats ob' xs =
+    [ OFeat ob' x k
+    | (x, k) <- zip (unCb xs) [0..] ]
 
 
--- | Observation features with probabilities in the given sentence.
-probOFeats :: Xs -> Ys -> [(Feat, L.LogFloat)]
-probOFeats xs ys = concatMap (obFeats xs ys) [0 .. V.length xs - 1]
+trFeats1 :: Cb -> [Feat]
+trFeats1 xs =
+    [ TFeat1 x k
+    | (x, k) <- zip (unCb xs) [0..] ]
 
 
--- | Transition features with probabilities in the given sentence.
-probTFeats :: Ys -> [(Feat, L.LogFloat)]
-probTFeats ys = concatMap (trFeats ys) [0 .. V.length ys - 1]
+trFeats2 :: Cb -> Cb -> [Feat]
+trFeats2 xs1 xs2 =
+    [ TFeat2 x1' x2' k
+    | (x1', x2', k) <- zip3 (unCb xs1) (unCb xs2) [0..] ]
 
 
--- | Hidden features of both types with probabilities in the given sentence.
-probFeats :: Xs -> Ys -> [(Feat, L.LogFloat)]
-probFeats xs ys = probOFeats xs ys ++ probTFeats ys
+trFeats3 :: Cb -> Cb -> Cb -> [Feat]
+trFeats3 xs1 xs2 xs3 =
+    [ TFeat3 x1' x2' x3' k
+    | (x1', x2', x3', k) <- zip4 (unCb xs1) (unCb xs2) (unCb xs3) [0..] ]
+
+
+----------------------------------------------------
+-- Feature extraction
+----------------------------------------------------
+
+
+-- | Features present in the dataset element together with corresponding
+-- occurence probabilities.
+presentFeats :: Xs -> Ys -> [(Feat, L.LogFloat)]
+presentFeats xs ys = concat
+    [ obFs i ++ trFs i
+    | i <- [0 .. V.length xs - 1] ]
+  where
+    obFs i =
+        [ (ft, pr)
+        | o <- unX (xs V.! i)
+        , (u, pr) <- unY (ys V.! i)
+        , ft <- obFeats o u ]
+    trFs 0 =
+        [ (ft, pr)
+        | (u, pr) <- unY (ys V.! 0)
+        , ft <- trFeats1 u ]
+    trFs 1 =
+        [ (ft, pr1 * pr2)
+        | (u, pr1) <- unY (ys V.! 1)
+        , (v, pr2) <- unY (ys V.! 0)
+        , ft <- trFeats2 u v ]
+    trFs i =
+        [ (ft, pr1 * pr2 * pr3)
+        | (u, pr1) <- unY (ys V.! i)
+        , (v, pr2) <- unY (ys V.! (i-1))
+        , (w, pr3) <- unY (ys V.! (i-2))
+        , ft <- trFeats3 u v w ]
+
+
+-- | Features hidden in the dataset element.
+hiddenFeats :: Xs -> [Feat]
+hiddenFeats xs =
+    obFs ++ trFs
+  where
+    obFs = concat
+        [ obFeatsOn xs i u
+        | i <- [0 .. V.length xs - 1]
+        , u <- lbIxs xs i ]
+    trFs = concat
+        [ trFeatsOn xs i u v w
+        | i <- [0 .. V.length xs - 1]
+        , u <- lbIxs xs i
+        , v <- lbIxs xs $ i - 1
+        , w <- lbIxs xs $ i - 2 ]
+
+
+-- | Observation features on a given position and with respect
+-- to a given label (determined by idenex).
+obFeatsOn :: Xs -> Int -> CbIx -> [Feat]
+obFeatsOn xs i u = concat
+    [ obFeats ob' e
+    | e   <- lbs
+    , ob' <- unX (xs V.! i) ]
+  where 
+    lbs     = maybeToList (lbOn xs i u)
+{-# INLINE obFeatsOn #-}
+
+
+-- | Transition features on a given position and with respect
+-- to a given labels (determined by indexes).
+trFeatsOn :: Xs -> Int -> CbIx -> CbIx -> CbIx -> [Feat]
+trFeatsOn xs i u' v' w' =
+    doIt a b c
+  where
+    a = lbOn xs i       u'
+    b = lbOn xs (i - 1) v'
+    c = lbOn xs (i - 2) w'
+    doIt (Just u) (Just v) (Just w) = trFeats3 u v w
+    doIt (Just u) (Just v) _        = trFeats2 u v
+    doIt (Just u) _ _               = trFeats1 u
+    doIt _ _ _                      = []
+{-# INLINE trFeatsOn #-}
+
+
+----------------------------------------------------
+-- Feature selection
+----------------------------------------------------
+
+
+-- | A feature selection function type.
+type FeatSel = Xs -> Ys -> [Feat]
+
+
+-- | The 'presentFeats' adapted to fit feature selection specs.
+selectPresent :: FeatSel
+selectPresent xs = map fst . presentFeats xs
+
+
+-- | The 'hiddenFeats' adapted to fit feature selection specs.
+selectHidden :: FeatSel
+selectHidden xs _ = hiddenFeats xs

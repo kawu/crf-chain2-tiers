@@ -46,6 +46,7 @@ module Data.CRF.Chain2.Tiers.Dataset.Internal
 
 import           Data.Binary (Binary)
 import           Data.Ix (Ix)
+import           Control.Arrow (second)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Array.Unboxed as A
@@ -53,6 +54,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Generic.Base as G
 import qualified Data.Vector.Generic.Mutable as G
+import qualified Data.Number.LogFloat as L
 -- import qualified Data.Primitive.ByteArray as BA
 
 
@@ -150,20 +152,20 @@ unR = V.toList . _unR
 
 
 -- | Vector of chosen labels together with
--- corresponding probabilities.
+-- corresponding probabilities in log domain.
 newtype Y = Y { _unY :: V.Vector (Cb, Double) }
     deriving (Show, Eq, Ord)
 
 
 -- | Y constructor.
 mkY :: [(Cb, Double)] -> Y
-mkY = Y . V.fromList
+mkY = Y . V.fromList . map (second log)
 {-# INLINE mkY #-}
 
 
 -- | Y deconstructor symetric to mkY.
-unY :: Y -> [(Cb, Double)]
-unY = V.toList . _unY
+unY :: Y -> [(Cb, L.LogFloat)]
+unY = map (second L.logToLogFloat) . V.toList . _unY
 {-# INLINE unY #-}
 
 
