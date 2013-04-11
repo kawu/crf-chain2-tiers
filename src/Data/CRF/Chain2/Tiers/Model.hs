@@ -17,15 +17,16 @@ module Data.CRF.Chain2.Tiers.Model
 
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad (guard)
-import           Data.Maybe (catMaybes)
 import           Data.List (foldl1')
 import           Data.Binary (Binary, get, put)
 import qualified Data.Set as S
 import qualified Data.Map as M
+import qualified Data.IntMap as IM
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import           Data.Vector.Binary ()
-import qualified Data.Array.Unboxed as A
+import qualified Data.Array as A
+import qualified Data.Array.Unboxed as UA
 import           Data.Ix (Ix, inRange, range)
 import qualified Data.Number.LogFloat as L
 
@@ -45,62 +46,143 @@ dummy = FeatIx (-1)
 
 
 -- | Transition map restricted to a particular tagging layer.
-type TransMap = A.UArray (Lb, Lb, Lb) FeatIx
+-- Transitions of x form.
+type T1Map = UA.UArray Lb FeatIx
 
 
--- | CRF feature map.
-data FeatMap = FeatMap
-    { transMaps	:: V.Vector TransMap
-    , otherMap 	:: M.Map Feat FeatIx }
+-- | Transition map restricted to a particular tagging layer.
+-- Transitions of (x, y) form.
+type T2Map = UA.UArray (Lb, Lb) FeatIx
 
 
-instance Binary FeatMap where
-    put FeatMap{..} = put transMaps >> put otherMap
-    get = FeatMap <$> get <*> get
+-- | Transition map restricted to a particular tagging layer.
+-- Transitions of (x, y, z) form.
+type T3Map = UA.UArray (Lb, Lb, Lb) FeatIx
+
+
+mkT3Map :: [(Feat, FeatIx)] -> T3Map
+mkT3Map xs =
+    let ys = [((x, y, z), ix) | (TFeat3 x y z _, ix) <- xs]
+        p = foldl1' updateMin (map fst ys)
+        q = foldl1' updateMax (map fst ys)
+        updateMin (!x, !y, !z) (x', y', z') =
+            (min x x', min y y', min z z')
+        updateMax (!x, !y, !z) (x', y', z') =
+            (max x x', max y y', max z z')
+        zeroed pq = UA.array pq [(k, dummy) | k <- range pq]
+    in  zeroed (p, q) UA.// ys
+
+
+mkT2Map :: [(Feat, FeatIx)] -> T2Map
+mkT2Map xs =
+    let ys = [((x, y), ix) | (TFeat2 x y _, ix) <- xs]
+        p = foldl1' updateMin (map fst ys)
+        q = foldl1' updateMax (map fst ys)
+        updateMin (!x, !y) (x', y') =
+            (min x x', min y y')
+        updateMax (!x, !y) (x', y') =
+            (max x x', max y y')
+        zeroed pq = UA.array pq [(k, dummy) | k <- range pq]
+    in  zeroed (p, q) UA.// ys
+
+
+mkT1Map :: [(Feat, FeatIx)] -> T1Map
+mkT1Map xs =
+    let ys = [(x, ix) | (TFeat1 x _, ix) <- xs]
+        p = foldl1' updateMin (map fst ys)
+        q = foldl1' updateMax (map fst ys)
+        updateMin (!x) (x') = (min x x')
+        updateMax (!x) (x') = (max x x')
+        zeroed pq = UA.array pq [(k, dummy) | k <- range pq]
+    in  zeroed (p, q) UA.// ys
+
+
+-- | Observation map restricted to a particular tagging layer.
+-- For each label, IntMap with observations.
+-- TODO: Try more memory-efficient solution.
+type OMap = A.Array Lb (IM.IntMap FeatIx)
+
+
+mkOMap :: [(Feat, FeatIx)] -> OMap
+mkOMap xs =
+    zeroed A.// M.toList m
+  where
+    m = fmap IM.fromList $ M.fromListWith (++)
+        [ (x, [(unOb ob, ix)])
+        | (OFeat ob x _, ix) <- xs ]
+    p = fst $ M.findMin m
+    q = fst $ M.findMax m
+    zeroed = UA.array (p, q) [(k, IM.empty) | k <- range (p, q)]
+
+
+-- | Feature map restricted to a particular layer.
+data LayerMap = LayerMap
+    { t1Map     :: !T1Map
+    , t2Map     :: !T2Map
+    , t3Map     :: !T3Map
+    , obMap     :: !OMap }
+
+
+instance Binary LayerMap where
+    put LayerMap{..} = put t1Map >> put t2Map >> put t3Map >> put obMap
+    get = LayerMap <$> get <*> get <*> get <*> get
+
+
+-- | Feature map is a vectro of layer maps.
+type FeatMap = V.Vector LayerMap
 
 
 -- | Get index of a feature.
 featIndex :: Feat -> FeatMap -> Maybe FeatIx
-featIndex (TFeat3 x y z k) (FeatMap v _) = do
-    m  <- v V.!? k
+featIndex (TFeat3 x y z k) v = do
+    m  <- t3Map <$> (v V.!? k)
     ix <- m !? (x, y, z)
     guard (ix /= dummy)
     return ix
-featIndex x (FeatMap _ m) = M.lookup x m
+featIndex (TFeat2 x y k) v = do
+    m  <- t2Map <$> (v V.!? k)
+    ix <- m !? (x, y)
+    guard (ix /= dummy)
+    return ix
+featIndex (TFeat1 x k) v = do
+    m  <- t1Map <$> (v V.!? k)
+    ix <- m !? x
+    guard (ix /= dummy)
+    return ix
+featIndex (OFeat ob x k) v = do
+    m  <- obMap <$> (v V.!? k)
+    ix <- IM.lookup (unOb ob) =<< (m !? x)
+    guard (ix /= dummy)
+    return ix
 
 
 -- | Make feature map from a *set* of (feature, index) pairs.
--- TODO: Take number of layers as argument -- it will
--- make computations faster.
 mkFeatMap :: [(Feat, FeatIx)] -> FeatMap
-mkFeatMap xs = FeatMap
-    ( V.fromList
-        [ mkArray . catMaybes $
-            map (getTFeat3 k) xs
-        | k <- [0 .. maxLayerNum xs] ] )
-    (M.fromList (filter (isOther . fst) xs))
+mkFeatMap xs = V.fromList
+
+    [ mkLayerMap $ filter (inLayer k . fst) xs
+    | k <- [0 .. maxLayerNum] ]
+
   where
-    maxLayerNum = maximum . map (ln.fst)
-    getTFeat3 i (TFeat3 x y z j, v)
-        | i == j                = Just ((x, y, z), v)
-        | otherwise             = Nothing
-    getTFeat3 _ _               = Nothing
-    isOther (TFeat3 _ _ _ _)    = False
-    isOther _                   = True
-    mkArray ys =
-        let p = foldl1' updateMin (map fst ys)
-            q = foldl1' updateMax (map fst ys)
-            updateMin (!x, !y, !z) (x', y', z') =
-                (min x x', min y y', min z z')
-            updateMax (!x, !y, !z) (x', y', z') =
-                (max x x', max y y', max z z')
-            zeroed pq = A.array pq [(k, dummy) | k <- range pq]
-        in  zeroed (p, q) A.// ys
+
+    -- Make layer map.
+    mkLayerMap = LayerMap
+        <$> mkT1Map
+        <*> mkT2Map
+        <*> mkT3Map
+        <*> mkOMap
+
+    -- Number of layers (TODO: should be taken as mkFeatMap argument).
+    maxLayerNum = maximum $ map (ln.fst) xs
+
+    -- Check if feature is in a given layer.
+    inLayer k x | ln x == k     = True
+                | otherwise     = False
 
 
-(!?) :: (Ix i, A.IArray a b) => a i b -> i -> Maybe b
-m !? x = if inRange (A.bounds m) x
-    then Just (m A.! x)
+(!?) :: (Ix i, UA.IArray a b) => a i b -> i -> Maybe b
+m !? x = if inRange (UA.bounds m) x
+    then Just (m UA.! x)
     else Nothing
 {-# INLINE (!?) #-}
 
