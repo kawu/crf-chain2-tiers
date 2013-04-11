@@ -40,7 +40,7 @@ library
 --       , Data.CRF.Chain2.Tiers.Feature.Present
       , Data.CRF.Chain2.Tiers.Model
       , Data.CRF.Chain2.Tiers.Inference
-      , Data.CRF.Chain2.Tiers.Train
+      , Data.CRF.Chain2.Tiers
 
     other-modules:
         Data.CRF.Chain2.Tiers.Util
