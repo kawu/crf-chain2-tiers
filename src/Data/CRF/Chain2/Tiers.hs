@@ -5,6 +5,9 @@ module Data.CRF.Chain2.Tiers
 ( CRF (..)
 , train
 , tag
+
+, module Data.CRF.Chain2.Tiers.Dataset.External
+, module Data.CRF.Chain2.Tiers.Feature
 ) where
 
 
@@ -18,7 +21,7 @@ import qualified Numeric.SGD.LogSigned as L
 
 import           Data.CRF.Chain2.Tiers.Dataset.Internal
 import           Data.CRF.Chain2.Tiers.Dataset.Codec
-import qualified Data.CRF.Chain2.Tiers.Dataset.External as E
+import           Data.CRF.Chain2.Tiers.Dataset.External
 import           Data.CRF.Chain2.Tiers.Feature
 import           Data.CRF.Chain2.Tiers.Model
 import qualified Data.CRF.Chain2.Tiers.Inference as I
@@ -55,8 +58,8 @@ train
     => Int                          -- ^ Number of layers
     -> SGD.SgdArgs                  -- ^ Args for SGD
     -> FeatSel                      -- ^ Feature selection
-    -> IO [E.SentL a b]             -- ^ Training data 'IO' action
-    -> Maybe (IO [E.SentL a b])     -- ^ Maybe evalation data
+    -> IO [SentL a b]               -- ^ Training data 'IO' action
+    -> Maybe (IO [SentL a b])       -- ^ Maybe evalation data
     -> IO (CRF a b)                 -- ^ Resulting codec and model
 train numOfLayers sgdArgs ftSel trainIO evalIO'Maybe = do
     hSetBuffering stdout NoBuffering
@@ -112,7 +115,7 @@ notify SGD.SgdArgs{..} model trainData evalDataM para k
 
 
 -- | Find the most probable label sequence.
-tag :: (Ord a, Ord b) => CRF a b -> E.Sent a b -> [[b]]
+tag :: (Ord a, Ord b) => CRF a b -> Sent a b -> [[b]]
 tag CRF{..} sent
     = onWords . decodeLabels codec
     . I.tag model . encodeSent codec
