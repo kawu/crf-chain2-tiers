@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 -- | Internal core data types.
@@ -47,8 +48,9 @@ module Data.CRF.Chain2.Tiers.Dataset.Internal
 ) where
 
 
-import           Data.Binary (Binary)
+import           Data.Binary (Binary, put, get)
 import           Data.Ix (Ix)
+import           Control.Applicative ((<$>), (<*>))
 import           Control.Arrow (second)
 import           Data.Int (Int16, Int32)
 import qualified Data.Set as S
@@ -140,7 +142,7 @@ unFeatIx = fromIntegral . _unFeatIx
 
 -- | A complex label is a vector of atomic labels.
 newtype Cb = Cb { _unCb :: U.Vector Lb }
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Binary)
 
 
 mkCb :: [Lb] -> Cb
@@ -164,6 +166,11 @@ data X = X {
     -- | A vector of potential labels.
     , _unR :: V.Vector Cb }
     deriving (Show, Eq, Ord)
+
+
+instance Binary X where
+    put X{..} = put _unX >> put _unR
+    get = X <$> get <*> get
 
 
 -- | Sentence of words.
@@ -191,7 +198,7 @@ unR = V.toList . _unR
 -- | Vector of chosen labels together with
 -- corresponding probabilities in log domain.
 newtype Y = Y { _unY :: V.Vector (Cb, Double) }
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Binary)
 
 
 -- | Y constructor.
@@ -282,7 +289,7 @@ lbIxs xs i
 
 -- | An ascending vector of distinct elements.
 newtype AVec a = AVec { unAVec :: V.Vector a }
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Binary)
 
 
 -- | Smart AVec constructor which ensures that the
@@ -295,7 +302,7 @@ mkAVec = AVec . V.fromList . S.toAscList  . S.fromList
 -- | An ascending vector of distinct elements with respect
 -- to 'fst' values.
 newtype AVec2 a b = AVec2 { unAVec2 :: V.Vector (a, b) }
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Binary)
 
 
 -- | Smart AVec constructor which ensures that the

@@ -29,7 +29,7 @@ library
       , comonad-transformers
       , logfloat
       , parallel
-      , sgd >= 0.2.2 && < 0.3
+      , sgd >= 0.3 && < 0.4
 
     exposed-modules:
         Data.CRF.Chain2.Tiers.Dataset.Internal
