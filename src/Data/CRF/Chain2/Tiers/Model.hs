@@ -21,11 +21,9 @@ import           Data.List (foldl1')
 import           Data.Binary (Binary, get, put)
 import qualified Data.Set as S
 import qualified Data.Map as M
-import qualified Data.IntMap as IM
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import           Data.Vector.Binary ()
-import qualified Data.Array as A
 import qualified Data.Array.Unboxed as UA
 import           Data.Ix (Ix, inRange, range)
 import qualified Data.Number.LogFloat as L
@@ -98,21 +96,66 @@ mkT1Map xs =
 
 
 -- | Observation map restricted to a particular tagging layer.
--- For each label, IntMap with observations.
--- TODO: Try more memory-efficient solution.
-type OMap = A.Array Lb (IM.IntMap FeatIx)
+data OMap = OMap {
+    -- | Where memory ranges related to
+    -- individual observations begin?
+      oBeg  :: U.Vector Int
+    -- | Labels related to individual observations.
+    , oLb   :: U.Vector Lb
+    -- | Feature indices related to individual (Ob, Lb) pairs.
+    , oIx   :: U.Vector FeatIx }
+
+
+instance Binary OMap where
+    put OMap{..} = put oBeg >> put oLb >> put oIx
+    get = OMap <$> get <*> get <*> get
 
 
 mkOMap :: [(Feat, FeatIx)] -> OMap
-mkOMap xs =
-    zeroed A.// M.toList m
+mkOMap xs = OMap
+
+    { oBeg = U.fromList $ scanl (+) 0
+        [ M.size lbMap
+        | ((ob, lbMap), i) <- zip (M.toAscList ftMap) [0..]
+        -- We check, if the set of keys (observations) is
+        -- equal to {0, 1, .., obNum-1}.
+        -- TODO: We don't really have to care if the condition is satisfied.
+        -- We can use dummy FeatIx values.
+        , if ob == Ob i
+            then True
+            else error "mkOMap: ob /= i" ]
+
+    , oLb = U.fromList . concat $
+        [ M.keys lbMap
+        | lbMap <- M.elems ftMap ]
+
+    , oIx = U.fromList . concat $
+        [ M.elems lbMap
+        | lbMap <- M.elems ftMap ] }
+
   where
-    m = fmap IM.fromList $ M.fromListWith (++)
-        [ (x, [(unOb ob, ix)])
+
+    -- A feature map of type Map Ob (Map Lb FeatIx).
+    ftMap = fmap M.fromList $ M.fromListWith (++)
+        [ (ob, [(x, ix)])
         | (OFeat ob x _, ix) <- xs ]
-    p = fst $ M.findMin m
-    q = fst $ M.findMax m
-    zeroed = UA.array (p, q) [(k, IM.empty) | k <- range (p, q)]
+
+
+-- -- | Observation map restricted to a particular tagging layer.
+-- -- For each label, IntMap with observations.
+-- type OMap = A.Array Lb (IM.IntMap FeatIx)
+-- 
+-- 
+-- mkOMap :: [(Feat, FeatIx)] -> OMap
+-- mkOMap xs =
+--     zeroed A.// M.toList m
+--   where
+--     m = fmap IM.fromList $ M.fromListWith (++)
+--         [ (x, [(unOb ob, ix)])
+--         | (OFeat ob x _, ix) <- xs ]
+--     p = fst $ M.findMin m
+--     q = fst $ M.findMax m
+--     zeroed = UA.array (p, q) [(k, IM.empty) | k <- range (p, q)]
 
 
 -- | Feature map restricted to a particular layer.
@@ -150,9 +193,12 @@ featIndex (TFeat1 x k) v = do
     guard (ix /= dummy)
     return ix
 featIndex (OFeat ob x k) v = do
-    m  <- obMap <$> (v V.!? k)
-    ix <- IM.lookup (unOb ob) =<< (m !? x)
-    guard (ix /= dummy)
+    OMap{..} <- obMap <$> (v V.!? k)
+    p  <- oBeg U.!? (unOb ob)
+    q  <- oBeg U.!? (unOb ob + 1)
+    i  <- U.findIndex (==x) (U.slice p (q - p) oLb)
+    ix <- oIx U.!? (p + i)
+    -- guard (ix /= dummy)
     return ix
 
 
@@ -160,6 +206,7 @@ featIndex (OFeat ob x k) v = do
 mkFeatMap :: [(Feat, FeatIx)] -> FeatMap
 mkFeatMap xs = V.fromList
 
+    -- TODO: We can first divide features between individual layers.
     [ mkLayerMap $ filter (inLayer k . fst) xs
     | k <- [0 .. maxLayerNum] ]
 
