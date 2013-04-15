@@ -43,6 +43,7 @@ library
     other-modules:
         Data.CRF.Chain2.Tiers.Util
       , Data.CRF.Chain2.Tiers.DP
+      , Data.CRF.Chain2.Tiers.Array
         
 
     ghc-options: -Wall -O2

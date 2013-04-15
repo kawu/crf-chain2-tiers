@@ -52,14 +52,14 @@ type Codec a b =
 obMax :: Codec a b -> Ob
 obMax =
     let idMax m = M.size m - 1
-    in  Ob . idMax . C.to . fst
+    in  mkOb . idMax . C.to . fst
 
 
 -- | The maximum internal labels included in the codec.
 lbMax :: Codec a b -> [Lb]
 lbMax =
     let idMax m = M.size m - 1
-    in  map (Lb . idMax . C.to) . V.toList . snd
+    in  map (mkLb . idMax . C.to) . V.toList . snd
 
 
 obLens :: Lens (a, b) a
@@ -97,18 +97,18 @@ type CodecM a b c = C.Codec (Codec a b) c
 -- | Encode the observation and update the codec (only in the encoding
 -- direction).
 encodeObU :: Ord a => a -> CodecM a b Ob
-encodeObU = fmap Ob . C.encode' obLens
+encodeObU = fmap mkOb . C.encode' obLens
 
 
 -- | Encode the observation and do *not* update the codec.
 encodeObN :: Ord a => a -> CodecM a b (Maybe Ob)
-encodeObN = fmap (fmap Ob) . C.maybeEncode obLens
+encodeObN = fmap (fmap mkOb) . C.maybeEncode obLens
 
 
 -- | Encode the label and update the codec.
 encodeLbU :: Ord b => [b] -> CodecM a b Cb
 encodeLbU xs = mkCb <$> sequence
-    [ Lb <$> C.encode (lbLens k) (Just x)
+    [ mkLb <$> C.encode (lbLens k) (Just x)
     | (x, k) <- zip xs [0..] ]
 
 
@@ -121,7 +121,7 @@ encodeLbN xs =
             Just x' -> return x'
             Nothing -> fromJust <$> C.maybeEncode lens Nothing
     in  mkCb <$> sequence
-            [ Lb <$> encode (lbLens k) x
+            [ mkLb <$> encode (lbLens k) x
             | (x, k) <- zip xs [0..] ]
 
 

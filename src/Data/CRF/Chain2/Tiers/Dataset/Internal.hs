@@ -8,9 +8,12 @@ module Data.CRF.Chain2.Tiers.Dataset.Internal
 (
 -- * Basic types
   Ob (..)
+, mkOb, unOb
 , Lb (..)
-, CbIx
+, mkLb, unLb
 , FeatIx (..)
+, mkFeatIx, unFeatIx
+, CbIx
 
 -- * Complex label
 , Cb (..)
@@ -47,6 +50,7 @@ module Data.CRF.Chain2.Tiers.Dataset.Internal
 import           Data.Binary (Binary)
 import           Data.Ix (Ix)
 import           Control.Arrow (second)
+import           Data.Int (Int16, Int32)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Array.Unboxed as A
@@ -57,6 +61,7 @@ import qualified Data.Vector.Generic.Mutable as G
 import qualified Data.Number.LogFloat as L
 -- import qualified Data.Primitive.ByteArray as BA
 
+import           Data.CRF.Chain2.Tiers.Array (Bounds)
 
 ----------------------------------------------------------------
 -- Basic types
@@ -64,16 +69,36 @@ import qualified Data.Number.LogFloat as L
 
 
 -- | An observation.
-newtype Ob = Ob { unOb :: Int }
+newtype Ob = Ob { _unOb :: Int32 }
     deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
              , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
 
 
+mkOb :: Int -> Ob
+mkOb = Ob . fromIntegral
+{-# INLINE mkOb #-}
+
+
+unOb :: Ob -> Int
+unOb = fromIntegral . _unOb
+{-# INLINE unOb #-}
+
+
 -- | An atomic label.
-newtype Lb = Lb { unLb :: Int }
+newtype Lb = Lb { _unLb :: Int16 }
     deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
              , G.Vector U.Vector, G.MVector U.MVector, U.Unbox
-             , Num, Ix)
+             , Num, Ix, Bounds)
+
+
+mkLb :: Int -> Lb
+mkLb = Lb . fromIntegral
+{-# INLINE mkLb #-}
+
+
+unLb :: Lb -> Int
+unLb = fromIntegral . _unLb
+{-# INLINE unLb #-}
 
 
 -- | An index of the label.
@@ -81,9 +106,19 @@ type CbIx = Int
 
 
 -- | A feature index.  To every model feature a unique index is assigned.
-newtype FeatIx = FeatIx { unFeatIx :: Int }
+newtype FeatIx = FeatIx { _unFeatIx :: Int32 }
     deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
              , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
+
+
+mkFeatIx :: Int -> FeatIx
+mkFeatIx = FeatIx . fromIntegral
+{-# INLINE mkFeatIx #-}
+
+
+unFeatIx :: FeatIx -> Int
+unFeatIx = fromIntegral . _unFeatIx
+{-# INLINE unFeatIx #-}
 
 
 ----------------------------------------------------------------
@@ -95,6 +130,8 @@ newtype FeatIx = FeatIx { unFeatIx :: Int }
 -- complex label with a byte array?  Complex labels
 -- should not be directly stored in a model, so if
 -- there is something to gain here, its not obvious.
+--
+-- Perhaps a list representation would be sufficient?
 
 
 -- -- | A complex label is an array of atomic labels.

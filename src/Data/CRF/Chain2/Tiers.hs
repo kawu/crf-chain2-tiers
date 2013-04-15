@@ -79,12 +79,12 @@ train numOfLayers sgdArgs ftSel trainIO evalIO'Maybe = do
 
 gradOn :: Model -> SGD.Para -> (Xs, Ys) -> SGD.Grad
 gradOn model para (xs, ys) = SGD.fromLogList $
-    [ (ix, L.fromPos val)
+    [ (unFeatIx ix, L.fromPos val)
     | (ft, val) <- presentFeats xs ys
-    , FeatIx ix <- maybeToList (index curr ft) ] ++
-    [ (ix, L.fromNeg val)
+    , ix <- maybeToList (index curr ft) ] ++
+    [ (unFeatIx ix, L.fromNeg val)
     | (ft, val) <- I.expectedFeatures curr xs
-    , FeatIx ix <- maybeToList (index curr ft) ]
+    , ix <- maybeToList (index curr ft) ]
   where
     curr = model { values = para }
 
