@@ -6,6 +6,7 @@ module Data.CRF.Chain2.Tiers
 ( 
 -- * CRF
   CRF (..)
+, size
 , prune
 
 -- * Training
@@ -53,6 +54,11 @@ data CRF a b = CRF
 instance (Ord a, Ord b, Binary a, Binary b) => Binary (CRF a b) where
     put CRF{..} = put numOfLayers >> put codec >> put model
     get = CRF <$> get <*> get <*> get
+
+
+-- | Compute size (number of features) of the model.
+size :: CRF a b -> Int
+size CRF{..} = M.size (toMap model)
 
 
 -- | Prune model features with absolute values (in log-domain)
