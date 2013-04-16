@@ -1,11 +1,21 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PatternGuards #-}
 
+
 module Data.CRF.Chain2.Tiers
-( CRF (..)
+( 
+-- * CRF
+  CRF (..)
+, prune
+
+-- * Training
 , train
+, reTrain
+
+-- * Tagging
 , tag
 
+-- * Modules
 , module Data.CRF.Chain2.Tiers.Dataset.External
 , module Data.CRF.Chain2.Tiers.Feature
 ) where
@@ -14,7 +24,9 @@ module Data.CRF.Chain2.Tiers
 import           System.IO (hSetBuffering, stdout, BufferMode (..))
 import           Control.Applicative ((<$>), (<*>))
 import           Data.Maybe (maybeToList)
+import qualified Data.Map as M
 import           Data.Binary (Binary, get, put)
+import qualified Data.Number.LogFloat as LogFloat
 import qualified Numeric.SGD as SGD
 import qualified Numeric.SGD.LogSigned as L
 
@@ -43,25 +55,32 @@ instance (Ord a, Ord b, Binary a, Binary b) => Binary (CRF a b) where
     get = CRF <$> get <*> get <*> get
 
 
+-- | Prune model features with absolute values (in log-domain)
+-- greater than the given threshold.
+prune :: Double -> CRF a b -> CRF a b
+prune x crf =  crf { model = newModel } where
+    newModel = fromMap . M.fromList $
+        [ (feat, val)
+        | (feat, val) <- M.toList $ toMap (model crf)
+        , abs (LogFloat.logFromLogFloat val) > x ]
+
+
 ----------------------------------------------------
 -- Training
 ----------------------------------------------------
 
 
 -- | Train the CRF using the stochastic gradient descent method.
--- When the evaluation data 'IO' action is 'Just', the iterative
--- training process will notify the user about the current accuracy
--- on the evaluation part every full iteration over the training part.
 train
     :: (Ord a, Ord b)
-    => Int                          -- ^ Number of layers
-    -> SGD.SgdArgs                  -- ^ Args for SGD
-    -> Bool                         -- ^ Store dataset on a disk
+    => Int                          -- ^ Number of layers (tiers)
     -> FeatSel                      -- ^ Feature selection
+    -> SGD.SgdArgs                  -- ^ SGD parameters
+    -> Bool                         -- ^ Store dataset on a disk
     -> IO [SentL a b]               -- ^ Training data 'IO' action
     -> IO [SentL a b]               -- ^ Evaluation data
-    -> IO (CRF a b)                 -- ^ Resulting codec and model
-train numOfLayers sgdArgs onDisk ftSel trainIO evalIO = do
+    -> IO (CRF a b)                 -- ^ Resulting model
+train numOfLayers featSel sgdArgs onDisk trainIO evalIO = do
     hSetBuffering stdout NoBuffering
 
     -- Create codec and encode the training dataset
@@ -74,11 +93,39 @@ train numOfLayers sgdArgs onDisk ftSel trainIO evalIO = do
     SGD.withData onDisk evalData_ $ \evalData -> do
 
     -- Train the model
-    model <- mkModel ftSel <$> SGD.loadData trainData
+    model <- mkModel featSel <$> SGD.loadData trainData
     para  <- SGD.sgd sgdArgs
         (notify sgdArgs model trainData evalData)
         (gradOn model) trainData (values model)
     return $ CRF numOfLayers codec model { values = para }
+
+
+-- | Re-train the CRF using the stochastic gradient descent method.
+reTrain
+    :: (Ord a, Ord b)
+    => CRF a b                      -- ^ Existing CRF model
+    -> SGD.SgdArgs                  -- ^ SGD parameters
+    -> Bool                         -- ^ Store dataset on a disk
+    -> IO [SentL a b]               -- ^ Training data 'IO' action
+    -> IO [SentL a b]               -- ^ Evaluation data
+    -> IO (CRF a b)                 -- ^ Resulting model
+reTrain crf sgdArgs onDisk trainIO evalIO = do
+    hSetBuffering stdout NoBuffering
+
+    -- Encode the training dataset
+    trainData_ <- encodeDataL (codec crf) <$> trainIO
+    SGD.withData onDisk trainData_ $ \trainData -> do
+
+    -- Encode the evaluation dataset
+    evalData_ <- encodeDataL (codec crf) <$> evalIO
+    SGD.withData onDisk evalData_ $ \evalData -> do
+
+    -- Train the model
+    let model' = model crf
+    para  <- SGD.sgd sgdArgs
+        (notify sgdArgs model' trainData evalData)
+        (gradOn model') trainData (values model')
+    return $ crf { model = model' { values = para } }
 
 
 -- | Compute gradient on a dataset element.

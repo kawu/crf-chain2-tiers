@@ -124,14 +124,8 @@ mkOMap xs = OMap
 
     { oBeg = U.fromList $ scanl (+) 0
         [ fromIntegral (M.size lbMap)
-        | ((ob, lbMap), i) <- zip (M.toAscList ftMap) [0..]
-        -- We check, if the set of keys (observations) is
-        -- equal to {0, 1, .., obNum-1}.
-        -- TODO: We don't really have to care if the condition is satisfied.
-        -- We can use dummy FeatIx values.
-        , if ob == Ob i
-            then True
-            else error "mkOMap: ob /= i" ]
+        | ob <- map mkOb [0 .. maxOb]
+        , let lbMap = maybe M.empty id $ M.lookup ob ftMap ]
 
     , oLb = U.fromList . concat $
         [ M.keys lbMap
@@ -147,6 +141,9 @@ mkOMap xs = OMap
     ftMap = fmap M.fromList $ M.fromListWith (++)
         [ (ob, [(x, ix)])
         | (OFeat ob x _, ix) <- xs ]
+
+    -- Max observation
+    maxOb = unOb . fst $ M.findMax ftMap
 
 
 -- | Deconstruct observation feature map given the layer identifier.
