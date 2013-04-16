@@ -39,12 +39,6 @@ module Data.CRF.Chain2.Tiers.Dataset.Internal
 , lbOn
 , lbNum
 , lbIxs
-
--- * AVec
-, AVec (unAVec)
-, mkAVec
-, AVec2 (unAVec2)
-, mkAVec2
 ) where
 
 
@@ -53,8 +47,6 @@ import           Data.Ix (Ix)
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Arrow (second)
 import           Data.Int (Int16, Int32)
-import qualified Data.Set as S
-import qualified Data.Map as M
 import qualified Data.Array.Unboxed as A
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
@@ -76,11 +68,13 @@ newtype Ob = Ob { _unOb :: Int32 }
              , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
 
 
+-- | Smart observation constructor.
 mkOb :: Int -> Ob
 mkOb = Ob . fromIntegral
 {-# INLINE mkOb #-}
 
 
+-- | Deconstract observation.
 unOb :: Ob -> Int
 unOb = fromIntegral . _unOb
 {-# INLINE unOb #-}
@@ -93,11 +87,13 @@ newtype Lb = Lb { _unLb :: Int16 }
              , Num, Ix, Bounds)
 
 
+-- | Smart label constructor.
 mkLb :: Int -> Lb
 mkLb = Lb . fromIntegral
 {-# INLINE mkLb #-}
 
 
+-- | Deconstract label.
 unLb :: Lb -> Int
 unLb = fromIntegral . _unLb
 {-# INLINE unLb #-}
@@ -113,11 +109,13 @@ newtype FeatIx = FeatIx { _unFeatIx :: Int32 }
              , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
 
 
+-- | Smart feature index constructor.
 mkFeatIx :: Int -> FeatIx
 mkFeatIx = FeatIx . fromIntegral
 {-# INLINE mkFeatIx #-}
 
 
+-- | Deconstract feature index.
 unFeatIx :: FeatIx -> Int
 unFeatIx = fromIntegral . _unFeatIx
 {-# INLINE unFeatIx #-}
@@ -145,10 +143,12 @@ newtype Cb = Cb { _unCb :: U.Vector Lb }
     deriving (Show, Eq, Ord, Binary)
 
 
+-- | Smart complex label constructor.
 mkCb :: [Lb] -> Cb
 mkCb = Cb . U.fromList
 
 
+-- | Deconstract complex label.
 unCb :: Cb -> [Lb]
 unCb = U.toList . _unCb
 
@@ -177,7 +177,7 @@ instance Binary X where
 type Xs = V.Vector X
 
 
--- | X constructor.
+-- | Smart `X` constructor.
 mkX :: [Ob] -> [Cb] -> X
 mkX x r = X (U.fromList x) (V.fromList r)
 {-# INLINE mkX #-}
@@ -277,37 +277,3 @@ lbIxs xs i
   where
     n = V.length xs
 {-# INLINE lbIxs #-}
-
-
-----------------------------------------------------------------
--- AVec
---
--- TODO: Move AVec and intersection implementation to a
--- separate module.
-----------------------------------------------------------------
-
-
--- | An ascending vector of distinct elements.
-newtype AVec a = AVec { unAVec :: V.Vector a }
-    deriving (Show, Eq, Ord, Binary)
-
-
--- | Smart AVec constructor which ensures that the
--- underlying vector is strictly ascending.
-mkAVec :: Ord a => [a] -> AVec a
-mkAVec = AVec . V.fromList . S.toAscList  . S.fromList 
-{-# INLINE mkAVec #-}
-
-
--- | An ascending vector of distinct elements with respect
--- to 'fst' values.
-newtype AVec2 a b = AVec2 { unAVec2 :: V.Vector (a, b) }
-    deriving (Show, Eq, Ord, Binary)
-
-
--- | Smart AVec constructor which ensures that the
--- underlying vector is strictly ascending with respect
--- to fst values.
-mkAVec2 :: Ord a => [(a, b)] -> AVec2 a b
-mkAVec2 = AVec2 . V.fromList . M.toAscList  . M.fromList 
-{-# INLINE mkAVec2 #-}

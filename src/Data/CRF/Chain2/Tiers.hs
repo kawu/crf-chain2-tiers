@@ -61,8 +61,8 @@ size :: CRF a b -> Int
 size CRF{..} = M.size (toMap model)
 
 
--- | Prune model features with absolute values (in log-domain)
--- greater than the given threshold.
+-- | Discard model features with absolute values (in log-domain)
+-- lower than the given threshold.
 prune :: Double -> CRF a b -> CRF a b
 prune x crf =  crf { model = newModel } where
     newModel = fromMap . M.fromList $

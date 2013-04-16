@@ -37,20 +37,24 @@ import Data.CRF.Chain2.Tiers.Dataset.Internal
 ----------------------------------------------------
 
 
--- | Feature.
+-- | Feature; every feature is associated to a layer with `ln` identifier.
 data Feat
+    -- | Second-order transition feature.
     = TFeat3
         { x1    :: {-# UNPACK #-} !Lb
         , x2    :: {-# UNPACK #-} !Lb
         , x3    :: {-# UNPACK #-} !Lb
         , ln    :: {-# UNPACK #-} !Int }
+    -- | First-order transition feature.
     | TFeat2
         { x1    :: {-# UNPACK #-} !Lb
         , x2    :: {-# UNPACK #-} !Lb
         , ln    :: {-# UNPACK #-} !Int }
+    -- | Zero-order transition feature.
     | TFeat1
         { x1    :: {-# UNPACK #-} !Lb
         , ln    :: {-# UNPACK #-} !Int }
+    -- | Observation feature.
     | OFeat
         { ob    :: {-# UNPACK #-} !Ob
         , x1    :: {-# UNPACK #-} !Lb
@@ -76,24 +80,28 @@ instance Binary Feat where
 ----------------------------------------------------
 
 
+-- | Generate observation features.
 obFeats :: Ob -> Cb -> [Feat]
 obFeats ob' xs =
     [ OFeat ob' x k
     | (x, k) <- zip (unCb xs) [0..] ]
 
 
+-- | Generate zero-order transition features.
 trFeats1 :: Cb -> [Feat]
 trFeats1 xs =
     [ TFeat1 x k
     | (x, k) <- zip (unCb xs) [0..] ]
 
 
+-- | Generate first-order transition features.
 trFeats2 :: Cb -> Cb -> [Feat]
 trFeats2 xs1 xs2 =
     [ TFeat2 x1' x2' k
     | (x1', x2', k) <- zip3 (unCb xs1) (unCb xs2) [0..] ]
 
 
+-- | Generate second-order transition features.
 trFeats3 :: Cb -> Cb -> Cb -> [Feat]
 trFeats3 xs1 xs2 xs3 =
     [ TFeat3 x1' x2' x3' k

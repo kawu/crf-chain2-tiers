@@ -5,9 +5,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 
--- | An unboxed array in terms of an unboxed vector.
-
-
 module Data.CRF.Chain2.Tiers.Array
 (
 -- * Array
@@ -37,6 +34,7 @@ import           Data.Vector.Binary ()
 --------------------------------
 
 
+-- | An unboxed array implemented in terms of an unboxed vector.  
 data Array i a = Array
     { bounds    :: (i, i)
     , array     :: U.Vector a }

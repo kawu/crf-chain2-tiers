@@ -75,9 +75,13 @@ zxAlpha acc sent alpha = acc
     , j <- lbIxs sent (n - 2) ]
     where n = V.length sent
 
+-- | Normalization factor computed for the Xs sentence using the
+-- backward computation.
 zx :: Model -> Xs -> L.LogFloat
 zx crf = zxBeta . backward sum crf
 
+-- | Normalization factor computed for the Xs sentence using the
+-- forward computation.
 zx' :: Model -> Xs -> L.LogFloat
 zx' crf sent = zxAlpha sum sent (forward sum crf sent)
 
@@ -105,11 +109,14 @@ tagIxs crf sent = collectMaxArg (0, 0, 0) [] mem where
                   | h == -1 = reverse acc
                   | otherwise = collectMaxArg (i + 1, h, j) (h:acc) mem
 
+-- | Find the most probable label sequence satisfying the constraints
+-- imposed over label values.
 tag :: Model -> Xs -> [Cb]
 tag crf sent =
     let ixs = tagIxs crf sent
     in  [lbAt x i | (x, i) <- zip (V.toList sent) ixs]
 
+-- | Tag potential labels with corresponding probabilities.
 probs :: Model -> Xs -> [[L.LogFloat]]
 probs crf sent =
     let alpha = forward maximum crf sent
@@ -123,6 +130,7 @@ probs crf sent =
     in  [ normalize [m1 i k | k <- lbIxs sent i]
         | i <- [0 .. V.length sent - 1] ]
 
+-- | Tag potential labels with marginal probabilities.
 marginals :: Model -> Xs -> [[L.LogFloat]]
 marginals crf sent =
     let alpha = forward sum crf sent
@@ -204,6 +212,11 @@ expectedFeaturesOn crf alpha beta sent k =
           obFs = obFeatsOn sent k
           trFs = trFeatsOn sent k
 
+-- | A list of features (represented by feature indices) defined within
+-- the context of the sentence accompanied by expected probabilities
+-- determined on the basis of the model.
+--
+-- One feature can occur multiple times in the output list.
 expectedFeatures :: Model -> Xs -> [(Feat, L.LogFloat)]
 expectedFeatures crf sent =
     -- force parallel computation of alpha and beta tables

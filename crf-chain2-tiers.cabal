@@ -1,8 +1,12 @@
 name:               crf-chain2-tiers
 version:            0.1.0
-synopsis:           TODO
+synopsis:           Second-order, tiered, constrained, linear conditional random fields
 description:
-    TODO
+    The library provides implementation of the second-order, linear
+    conditional random fields (CRFs) with position-wise constraints
+    imposed over label values.  Each label consists of a vector of
+    smaller, atomic labels, and over each tier (layer) a separate
+    set of model features is defined.
 license:            BSD3
 license-file:       LICENSE
 cabal-version:      >= 1.6
