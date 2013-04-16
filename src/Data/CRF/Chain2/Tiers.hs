@@ -59,29 +59,29 @@ train
     -> Bool                         -- ^ Store dataset on a disk
     -> FeatSel                      -- ^ Feature selection
     -> IO [SentL a b]               -- ^ Training data 'IO' action
-    -> Maybe (IO [SentL a b])       -- ^ Maybe evalation data
+    -> IO [SentL a b]               -- ^ Evaluation data
     -> IO (CRF a b)                 -- ^ Resulting codec and model
-train numOfLayers sgdArgs onDisk ftSel trainIO evalIO'Maybe = do
+train numOfLayers sgdArgs onDisk ftSel trainIO evalIO = do
     hSetBuffering stdout NoBuffering
 
-    (codec, trainData_) <- mkCodec numOfLayers <$> trainIO
+    -- Create codec and encode the training dataset
+    codec <- mkCodec numOfLayers    <$> trainIO
+    trainData_ <- encodeDataL codec <$> trainIO
     SGD.withData onDisk trainData_ $ \trainData -> do
 
-    evalData_ <- case evalIO'Maybe of
-        Just evalIO -> encodeDataL codec <$> evalIO
-        Nothing     -> return []
+    -- Encode the evaluation dataset
+    evalData_ <- encodeDataL codec <$> evalIO
     SGD.withData onDisk evalData_ $ \evalData -> do
 
+    -- Train the model
     model <- mkModel ftSel <$> SGD.loadData trainData
     para  <- SGD.sgd sgdArgs
         (notify sgdArgs model trainData evalData)
         (gradOn model) trainData (values model)
-    return $ CRF
-        numOfLayers
-        codec
-        model { values = para }
+    return $ CRF numOfLayers codec model { values = para }
 
 
+-- | Compute gradient on a dataset element.
 gradOn :: Model -> SGD.Para -> (Xs, Ys) -> SGD.Grad
 gradOn model para (xs, ys) = SGD.fromLogList $
     [ (unFeatIx ix, L.fromPos val)
