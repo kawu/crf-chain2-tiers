@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -12,6 +13,7 @@ module Data.CRF.Chain2.Tiers.Array
 -- * Array
   Array
 , mkArray
+, unArray
 , (!?)
 
 -- * Bounds
@@ -23,10 +25,16 @@ import           Control.Applicative ((<$>), (<*>))
 import           Control.Arrow (first)
 import           Data.Ix
 import           Data.Int (Int16)
+import           Data.Maybe (catMaybes)
 import           Data.List (foldl1')
 import qualified Data.Vector.Unboxed as U
 import           Data.Binary (Binary, get, put)
 import           Data.Vector.Binary ()
+
+
+--------------------------------
+-- Array
+--------------------------------
 
 
 data Array i a = Array
@@ -39,9 +47,9 @@ instance (Binary i, Binary a, U.Unbox a) => Binary (Array i a) where
     get = Array <$> get <*> get
 
 
--- | Construct array with a default value.
+-- | Construct array with a default dummy value.
 mkArray :: (Bounds i, U.Unbox a) => a -> [(i, a)] -> Array i a
-mkArray defVal xs = Array
+mkArray dummy xs = Array
     { bounds    = (p, q)
     , array     = zeroed U.// map (first ix) xs }
   where
@@ -49,8 +57,16 @@ mkArray defVal xs = Array
     q       = foldl1' upper (map fst xs)
     ix      = index (p, q)
     size    = rangeSize (p, q)
-    zeroed  = U.replicate size defVal
+    zeroed  = U.replicate size dummy
 {-# INLINE mkArray #-}
+
+
+-- | Deconstruct the array.
+unArray :: (Bounds i, U.Unbox a) => Array i a -> [(i, a)]
+unArray ar = catMaybes
+    [ (i,) <$> (ar !? i)
+    | i <- range (bounds ar) ]
+{-# INLINE unArray #-}
 
 
 (!?) :: (Ix i, U.Unbox a) => Array i a -> i -> Maybe a

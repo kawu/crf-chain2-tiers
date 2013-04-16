@@ -6,8 +6,15 @@
 
 
 module Data.CRF.Chain2.Tiers.Model
-( Model (..)
+( 
+-- * Model
+  Model (..)
 , mkModel
+, fromSet
+, fromMap
+, toMap
+
+-- * Potential
 , phi
 , index
 , onWord
@@ -75,6 +82,27 @@ mkT1Map xs =
     in  A.mkArray dummy ys
 
 
+unT3Map :: Int -> T3Map -> [(Feat, FeatIx)]
+unT3Map k t3 =
+    [ (TFeat3 x y z k, ix)
+    | ((x, y, z), ix) <- A.unArray t3
+    , ix /= dummy ]
+
+
+unT2Map :: Int -> T2Map -> [(Feat, FeatIx)]
+unT2Map k t2 =
+    [ (TFeat2 x y k, ix)
+    | ((x, y), ix) <- A.unArray t2
+    , ix /= dummy ]
+
+
+unT1Map :: Int -> T1Map -> [(Feat, FeatIx)]
+unT1Map k t1 =
+    [ (TFeat1 x k, ix)
+    | (x, ix) <- A.unArray t1
+    , ix /= dummy ]
+
+
 -- | Observation map restricted to a particular tagging layer.
 data OMap = OMap {
     -- | Where memory ranges related to
@@ -121,6 +149,20 @@ mkOMap xs = OMap
         | (OFeat ob x _, ix) <- xs ]
 
 
+-- | Deconstruct observation feature map given the layer identifier.
+unOMap :: Int -> OMap -> [(Feat, FeatIx)]
+unOMap k OMap{..} =
+    [ (OFeat o x k, i)
+    | (o, (p, q)) <- zip
+        (map mkOb [0..])
+        (pairs . map fromIntegral $ U.toList oBeg)
+    , (x, i)  <- zip
+        (U.toList $ U.slice p (q - p) oLb)
+        (U.toList $ U.slice p (q - p) oIx) ]
+  where
+    pairs xs = zip xs (tail xs)
+
+
 -- | Feature map restricted to a particular layer.
 data LayerMap = LayerMap
     { t1Map     :: !T1Map
@@ -132,6 +174,15 @@ data LayerMap = LayerMap
 instance Binary LayerMap where
     put LayerMap{..} = put t1Map >> put t2Map >> put t3Map >> put obMap
     get = LayerMap <$> get <*> get <*> get <*> get
+
+
+-- | Deconstruct the layer map given the layer identifier.
+unLayerMap :: Int -> LayerMap -> [(Feat, FeatIx)]
+unLayerMap k LayerMap{..} = concat
+    [ unT1Map k t1Map
+    , unT2Map k t2Map
+    , unT3Map k t3Map
+    , unOMap  k obMap ]
 
 
 -- | Feature map is a vectro of layer maps.
@@ -182,12 +233,19 @@ mkFeatMap xs = V.fromList
         <*> mkT3Map
         <*> mkOMap
 
-    -- Number of layers (TODO: should be taken as mkFeatMap argument).
+    -- Number of layers (TODO: could be taken as mkFeatMap argument).
     maxLayerNum = maximum $ map (ln.fst) xs
 
     -- Check if feature is in a given layer.
     inLayer k x | ln x == k     = True
                 | otherwise     = False
+
+
+-- | Deconstruct the feature map.
+unFeatMap :: FeatMap -> [(Feat, FeatIx)]
+unFeatMap fm = concat
+    [ unLayerMap i layer
+    | (i, layer) <- zip [0..] (V.toList fm) ]
 
 
 ----------------------------------------------------
@@ -198,30 +256,56 @@ mkFeatMap xs = V.fromList
 -- | Internal model data.
 data Model = Model
     { values        :: U.Vector Double
-    , ixMap         :: FeatMap }
+    , featMap       :: FeatMap }
 
 
 instance Binary Model where
-    put Model{..} = put values >> put ixMap
+    put Model{..} = put values >> put featMap
     get = Model <$> get <*> get
 
 
--- | Construct model from a dataset.
-mkModel :: FeatSel -> [(Xs, Ys)] -> Model
-mkModel ftSel dataset = Model
-    { values    = U.replicate (S.size fs) 0.0 
-    , ixMap     =
+-- | Construct model from a feature set.
+-- All values will be set to 1 in log domain.
+fromSet :: S.Set Feat -> Model
+fromSet ftSet = Model
+    { values    = U.replicate (S.size ftSet) 0.0
+    , featMap   =
         let featIxs = map FeatIx [0..]
-            featLst = S.toList fs
+            featLst = S.toList ftSet
         in  mkFeatMap (zip featLst featIxs) }
-  where
-    fs = S.fromList $ concatMap (uncurry ftSel) dataset
+
+
+-- | Construct model from a dataset given a feature selection function.
+mkModel :: FeatSel -> [(Xs, Ys)] -> Model
+mkModel ftSel = fromSet . S.fromList . concatMap (uncurry ftSel)
+
+
+-- | Construct model from a (feature -> value) map.
+fromMap :: M.Map Feat L.LogFloat -> Model
+fromMap ftMap = Model
+    { values    = U.fromList . map L.logFromLogFloat $ M.elems ftMap
+    , featMap   =
+        let featIxs = map FeatIx [0..]
+            featLst = M.keys ftMap
+        in  mkFeatMap (zip featLst featIxs) }
+
+
+-- | Convert model to a (feature -> value) map.
+toMap :: Model -> M.Map Feat L.LogFloat
+toMap Model{..} = M.fromList
+    [ (ft, L.logToLogFloat (values U.! unFeatIx ix))
+    | (ft, ix) <- unFeatMap featMap ]
+
+
+----------------------------------------------------
+-- Potential
+----------------------------------------------------
 
 
 -- | Potential assigned to the feature -- exponential of the
 -- corresonding parameter.
 phi :: Model -> Feat -> L.LogFloat
-phi Model{..} ft = case featIndex ft ixMap of
+phi Model{..} ft = case featIndex ft featMap of
     Just ix -> L.logToLogFloat (values U.! unFeatIx ix)
     Nothing -> L.logToLogFloat (0 :: Float)
 {-# INLINE phi #-}
@@ -229,7 +313,7 @@ phi Model{..} ft = case featIndex ft ixMap of
 
 -- | Index of a feature.
 index :: Model -> Feat -> Maybe FeatIx
-index Model{..} ft = featIndex ft ixMap
+index Model{..} ft = featIndex ft featMap
 {-# INLINE index #-}
 
 
