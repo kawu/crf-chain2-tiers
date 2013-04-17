@@ -1,5 +1,5 @@
 name:               crf-chain2-tiers
-version:            0.1.0
+version:            0.1.1
 synopsis:           Second-order, tiered, constrained, linear conditional random fields
 description:
     The library provides implementation of the second-order, linear
@@ -33,7 +33,7 @@ library
       , comonad-transformers
       , logfloat
       , parallel
-      , sgd >= 0.3 && < 0.4
+      , sgd >= 0.3.2 && < 0.4
 
     exposed-modules:
         Data.CRF.Chain2.Tiers
