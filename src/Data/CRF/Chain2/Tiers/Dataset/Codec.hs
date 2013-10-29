@@ -28,7 +28,7 @@ module Data.CRF.Chain2.Tiers.Dataset.Codec
 
 
 import Control.Applicative ((<$>), (<*>), pure)
-import Control.Comonad.Trans.Store (store)
+import Control.Comonad.Store (store)
 import Data.Maybe (catMaybes, fromJust)
 import Data.Lens.Common (Lens(..), fstLens)
 import qualified Data.Set as S
