@@ -15,7 +15,7 @@ module Data.CRF.Chain2.Tiers
 
 -- * Tagging
 , tag
-, probs
+, marginals
 
 -- * Modules
 , module Data.CRF.Chain2.Tiers.Dataset.External
@@ -187,9 +187,9 @@ tag CRF{..} sent
         | (word, x) <- zip sent xs ]
 
 
--- | Tag labels with corresponding probabilities (in log-domain).
-probs :: (Ord a, Ord b) => CRF a b -> Sent a b -> [[Double]]
-probs CRF{..}
-    = map (map LogFloat.logFromLogFloat)
-    . I.probs model
+-- | Tag labels with marginal probabilities.
+marginals :: (Ord a, Ord b) => CRF a b -> Sent a b -> [[Double]]
+marginals CRF{..}
+    = map (map LogFloat.fromLogFloat)
+    . I.marginals model
     . encodeSent codec

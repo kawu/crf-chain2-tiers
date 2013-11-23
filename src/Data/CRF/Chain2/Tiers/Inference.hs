@@ -2,7 +2,7 @@
 
 module Data.CRF.Chain2.Tiers.Inference
 ( tag
-, probs
+-- , probs
 , marginals
 , expectedFeatures
 , accuracy
@@ -116,19 +116,21 @@ tag crf sent =
     let ixs = tagIxs crf sent
     in  [lbAt x i | (x, i) <- zip (V.toList sent) ixs]
 
--- | Tag labels with corresponding probabilities.
-probs :: Model -> Xs -> [[L.LogFloat]]
-probs crf sent =
-    let alpha = forward maximum crf sent
-        beta = backward maximum crf sent
-        normalize xs =
-            let d = - sum xs
-            in map (*d) xs
-        m1 k x = maximum
-            [ alpha k x y * beta (k + 1) x y
-            | y <- lbIxs sent (k - 1) ]
-    in  [ normalize [m1 i k | k <- lbIxs sent i]
-        | i <- [0 .. V.length sent - 1] ]
+-- -- | Tag labels with corresponding probabilities.
+-- TODO: doesn't work, crashes with "Data.Number.LogFloat.negate:
+-- argument out of range" for some reason.
+-- probs :: Model -> Xs -> [[L.LogFloat]]
+-- probs crf sent =
+--     let alpha = forward maximum crf sent
+--         beta = backward maximum crf sent
+--         normalize xs =
+--             let d = - sum xs
+--             in map (*d) xs
+--         m1 k x = maximum
+--             [ alpha k x y * beta (k + 1) x y
+--             | y <- lbIxs sent (k - 1) ]
+--     in  [ normalize [m1 i k | k <- lbIxs sent i]
+--         | i <- [0 .. V.length sent - 1] ]
 
 -- | Tag potential labels with marginal probabilities.
 marginals :: Model -> Xs -> [[L.LogFloat]]
