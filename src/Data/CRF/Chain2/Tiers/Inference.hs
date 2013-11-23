@@ -116,7 +116,7 @@ tag crf sent =
     let ixs = tagIxs crf sent
     in  [lbAt x i | (x, i) <- zip (V.toList sent) ixs]
 
--- | Tag potential labels with corresponding probabilities.
+-- | Tag labels with corresponding probabilities.
 probs :: Model -> Xs -> [[L.LogFloat]]
 probs crf sent =
     let alpha = forward maximum crf sent
