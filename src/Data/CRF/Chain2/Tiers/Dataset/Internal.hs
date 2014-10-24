@@ -1,5 +1,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
 
 
 -- | Internal core data types.
@@ -50,6 +53,7 @@ import           Data.Int (Int16, Int32)
 import qualified Data.Array.Unboxed as A
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
+import           Data.Vector.Unboxed.Deriving
 import qualified Data.Vector.Generic.Base as G
 import qualified Data.Vector.Generic.Mutable as G
 import qualified Data.Number.LogFloat as L
@@ -64,9 +68,10 @@ import           Data.CRF.Chain2.Tiers.Array (Bounds)
 
 -- | An observation.
 newtype Ob = Ob { _unOb :: Int32 }
-    deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
-             , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
-
+    deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray )
+--           GeneralizedNewtypeDeriving doesn't work for this in 7.8.2:
+--           , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
+derivingUnbox "Ob" [t| Ob -> Int32 |] [| _unOb |] [| Ob |]
 
 -- | Smart observation constructor.
 mkOb :: Int -> Ob
@@ -83,8 +88,8 @@ unOb = fromIntegral . _unOb
 -- | An atomic label.
 newtype Lb = Lb { _unLb :: Int16 }
     deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
-             , G.Vector U.Vector, G.MVector U.MVector, U.Unbox
              , Num, Ix, Bounds)
+derivingUnbox "Lb" [t| Lb -> Int16 |] [| _unLb |] [| Lb |]
 
 
 -- | Smart label constructor.
@@ -105,9 +110,8 @@ type CbIx = Int
 
 -- | A feature index.  To every model feature a unique index is assigned.
 newtype FeatIx = FeatIx { _unFeatIx :: Int32 }
-    deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
-             , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
-
+    deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray )
+derivingUnbox "FeatIx" [t| FeatIx -> Int32 |] [| _unFeatIx |] [| FeatIx |]
 
 -- | Smart feature index constructor.
 mkFeatIx :: Int -> FeatIx
