@@ -1,5 +1,5 @@
 name:               crf-chain2-tiers
-version:            0.2.1
+version:            0.2.2
 synopsis:           Second-order, tiered, constrained, linear conditional random fields
 description:
     The library provides implementation of the second-order, linear

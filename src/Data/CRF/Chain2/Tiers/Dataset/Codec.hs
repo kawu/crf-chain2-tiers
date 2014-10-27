@@ -79,7 +79,7 @@ lbLens k = Lens $ \(a, b) -> store
 
 -- | The empty codec.  The label parts are initialized with Nothing
 -- members, which represent unknown labels.  It is taken in the model
--- implementation on account because it is assigned to the
+-- implementation into account because it is assigned to the
 -- lowest label code and the model assumes that the set of labels
 -- is of the {0, ..., 'lbMax'} form.
 --
