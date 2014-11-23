@@ -30,7 +30,7 @@ library
       , vector-binary
       , monad-codec             >= 0.2          && < 0.3
       , data-lens               >= 2.10.4       && < 2.11
-      , comonad                 >= 4.0          && < 4.1
+      , comonad                 >= 4.0          && < 4.3
       , logfloat                >= 0.12.1       && < 0.13
       , parallel
       , sgd                     >= 0.3.2        && < 0.4
