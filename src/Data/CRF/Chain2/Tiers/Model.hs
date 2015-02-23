@@ -304,7 +304,7 @@ toMap Model{..} = M.fromList
 phi :: Model -> Feat -> L.LogFloat
 phi Model{..} ft = case featIndex ft featMap of
     Just ix -> L.logToLogFloat (values U.! unFeatIx ix)
-    Nothing -> L.logToLogFloat (0 :: Float)
+    Nothing -> L.logToLogFloat (0 :: Double)
 {-# INLINE phi #-}
 
 
