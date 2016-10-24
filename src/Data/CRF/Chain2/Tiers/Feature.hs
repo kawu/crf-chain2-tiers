@@ -83,7 +83,7 @@ hiddenFeats xs =
 
 
 -- | Observation features on a given position and with respect
--- to a given label (determined by idenex).
+-- to a given label (determined by index).
 obFeatsOn :: Xs -> Int -> CbIx -> [Feat]
 obFeatsOn xs i u = concat
     [ obFeats ob' e

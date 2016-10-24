@@ -1,5 +1,6 @@
 module Data.CRF.Chain2.Tiers.Dataset.Codec
 ( Codec
+, empty
 , CodecM
 , obMax
 , lbMax

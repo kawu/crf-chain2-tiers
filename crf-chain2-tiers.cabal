@@ -49,6 +49,8 @@ library
       , Data.CRF.Chain2.Tiers.Array
 
       , Data.CRF.Chain2.Tiers.DAG.Feature
+      , Data.CRF.Chain2.Tiers.DAG.Dataset.External
+      , Data.CRF.Chain2.Tiers.DAG.Dataset.Codec
 
     other-modules:
         Data.CRF.Chain2.Tiers.Util
