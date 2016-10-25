@@ -6,6 +6,12 @@ module Data.CRF.Chain2.Tiers.DAG.Dataset.Codec
 , XYs
 
 , encodeSent'Cu
+, encodeSent'Cn
+, encodeSent
+
+, encodeData
+, encodeDataL
+, mkCodec
 ) where
 
 

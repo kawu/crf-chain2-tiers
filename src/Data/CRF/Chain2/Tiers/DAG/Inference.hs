@@ -7,6 +7,7 @@ module Data.CRF.Chain2.Tiers.DAG.Inference
 , tag'
 , tagK
 , marginals
+, marginals'
 , accuracy
 , expectedFeaturesIn
 , zx
@@ -290,7 +291,6 @@ edgeProb1 dag alpha beta u = sum
 
 
 -- | Tag potential labels with marginal probabilities.
--- marginals :: Md.Model -> DAG a X -> DAG a [(Lb, L.LogFloat)]
 marginals :: Md.Model -> DAG a X -> DAG a [(CbIx, L.LogFloat)]
 marginals crf dag =
   DAG.mapE label dag
@@ -301,6 +301,17 @@ marginals crf dag =
     prob1 = edgeProb1 dag alpha beta
     alpha = forward sum crf dag
     beta = backward sum crf dag
+
+
+-- | Tag potential labels with marginal probabilities.
+marginals' :: Md.Model -> DAG a X -> DAG a [(Cb, L.LogFloat)]
+marginals' crf dag
+  = fmap lbAt
+  $ DAG.zipE dag (marginals crf dag)
+  where
+    lbAt (x, ys) =
+      [ (C.lbAt x cbIx, pr)
+      | (cbIx, pr) <- ys ]
 
 
 -- | Get (at most) k best tags for each word and return them in
