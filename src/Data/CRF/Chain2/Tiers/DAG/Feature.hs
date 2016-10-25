@@ -24,6 +24,8 @@ module Data.CRF.Chain2.Tiers.DAG.Feature
 , edgeIxs
 , prevEdgeIxs
 , nextEdgeIxs
+, initialEdgeIxs
+, finalEdgeIxs
 ) where
 
 
@@ -179,6 +181,22 @@ nextEdgeIxs dag (Just i)
   where js = DAG.nextEdges i dag
 
 
+-- | Obtain the list of initial EdgeIxs.
+initialEdgeIxs :: DAG a X -> [EdgeIx]
+initialEdgeIxs dag = concat
+  [ edgeIxs dag i
+  | i <- DAG.dagEdges dag
+  , DAG.isInitialEdge i dag ]
+
+
+-- | Obtain the list of final EdgeIxs.
+finalEdgeIxs :: DAG a X -> [EdgeIx]
+finalEdgeIxs dag = concat
+  [ edgeIxs dag i
+  | i <- DAG.dagEdges dag
+  , DAG.isFinalEdge i dag ]
+
+
 ----------------------------------------------------
 -- Hidden features
 ----------------------------------------------------
@@ -191,7 +209,7 @@ data EdgeIx = EdgeIx
   , lbIx   :: {-# UNPACK #-} !CbIx
     -- ^ Index of the corresponding complex label
   }
-  -- deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord)
 
 
 -- | Observation features on a given position and with respect

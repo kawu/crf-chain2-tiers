@@ -39,25 +39,30 @@ import qualified Data.CRF.Chain2.Tiers.DAG.Feature as Ft
 type AccF = [L.LogFloat] -> L.LogFloat
 
 
--- -- | TODO:
--- -- HYPO: The first CbIx is actually an EdgeID.
--- type ProbArray = CbIx -> CbIx -> CbIx -> L.LogFloat
--- 
--- 
--- type ProbArray' = EdgeID -> CbIx -> EdgeID -> CbIx -> L.LogFloat
--- type ProbArray'' = (EdgeID, CbIx) -> (EdgeID, CbIx) -> L.LogFloat
--- type ProbArray''' = EdgeIx -> EdgeIx -> L.LogFloat
+-- | Position in the sentence.
+data Pos
+  = Beg
+  | Mid EdgeIx
+  | End
+  deriving (Show, Eq, Ord)
+
+
+-- | Simplify the position by conflating `Beg` and `End` to `Nothing`.
+simplify :: Pos -> Maybe EdgeIx
+simplify (Mid x) = Just x
+simplify Beg = Nothing
+simplify End = Nothing
+
+
+-- | Inverse operation of `simplify`, with the default position value.
+complicate :: Pos -> Maybe EdgeIx -> Pos
+complicate df Nothing = df
+complicate _ (Just x) = Mid x
 
 
 -- | First argument represents the current EdgeIx (Nothing if out of bounds),
 -- the next argument represents the previous EdgeIx.
-type ProbArray = Maybe EdgeIx -> Maybe EdgeIx -> L.LogFloat
-
-
--- -- | First two arguments relate to the edge IDs of the current and
--- -- the prevous edge, the subsequent two CbIxs correspond to the
--- -- first EdgeID and the second EdgeID, respectively.
--- type ProbArrayA = (EdgeID, EdgeID) -> (CbIx, CbIx) -> L.LogFloat
+type ProbArray = Pos -> Pos -> L.LogFloat
 
 
 ---------------------------------------------
@@ -67,9 +72,9 @@ type ProbArray = Maybe EdgeIx -> Maybe EdgeIx -> L.LogFloat
 
 memoProbArray :: DAG a X -> ProbArray -> ProbArray
 memoProbArray dag =
-  Memo.memo2 mayMemoEdgeIx mayMemoEdgeIx
+  Memo.memo2 memoPos memoPos
   where
-    mayMemoEdgeIx = Memo.maybe (memoEdgeIx dag)
+    memoPos = undefined -- Memo.maybe (memoEdgeIx dag)
 
 
 memoEdgeIx :: DAG a X -> Memo.Memo EdgeIx
@@ -124,11 +129,20 @@ forward acc crf dag =
   alpha
   where
     alpha = memoProbArray dag alpha'
-    alpha' Nothing Nothing = 1.0
+    alpha' Beg Beg = 1.0
+    alpha' End End = acc
+      [ alpha End (Mid w)
+        -- below, onTransition equals currently to 1; in general, there could be
+        -- some related transition features, though.
+        * onTransition crf dag Nothing Nothing (Just w)
+      | w <- Ft.finalEdgeIxs dag ]
     alpha' u v = acc
-      [ alpha v w * psi (fromJust u)
-        * onTransition crf dag u v w
-      | w <- Ft.prevEdgeIxs dag (edgeID <$> v) ]
+      [ alpha v w * psi' u
+        * onTransition crf dag (simplify u) (simplify v) (simplify w)
+      | w <- complicate Beg <$> Ft.prevEdgeIxs dag (edgeID <$> simplify v) ]
+    psi' u = case u of
+      Mid x -> psi x
+      _ -> 1.0
     psi = memoEdgeIx dag $ onWord crf dag
 
 
@@ -138,31 +152,39 @@ backward acc crf dag =
   beta
   where
     beta = memoProbArray dag beta'
-    beta' Nothing Nothing = 1.0
+    beta' End End = 1.0
+    beta' Beg Beg = acc
+      [ beta (Mid u) Beg * psi u
+        * onTransition crf dag  (Just u) Nothing Nothing
+      | u <- Ft.initialEdgeIxs dag ]
     beta' v w = acc
       [ beta u v * psi' u
-        * onTransition crf dag u v w
-      | u <- Ft.nextEdgeIxs dag (edgeID <$> v) ]
-    psi' Nothing = 1.0
-    psi' (Just u) = psi u
+        * onTransition crf dag (simplify u) (simplify v) (simplify w)
+      | u <- complicate End <$> Ft.nextEdgeIxs dag (edgeID <$> simplify v) ]
+    psi' u = case u of
+      Mid x -> psi x
+      _ -> 1.0
     psi = memoEdgeIx dag $ onWord crf dag
-
-
--- | Normalization factor based on probability array.
-zxProbArray :: ProbArray -> L.LogFloat
-zxProbArray pa = pa Nothing Nothing
-
-
--- | Normalization factor computed for the sentence using the backward
--- computation.
-zx :: Md.Model -> DAG a X -> L.LogFloat
-zx crf = zxProbArray . backward sum crf
 
 
 -- | Normalization factor computed for the sentence using the forward
 -- computation.
+zx :: Md.Model -> DAG a X -> L.LogFloat
+zx crf = zxAlpha . forward sum crf
+
+-- | Normalization factor based on the forward table.
+zxAlpha :: ProbArray -> L.LogFloat
+zxAlpha pa = pa End End
+
+
+-- | Normalization factor computed for the sentence using the backward
+-- computation.
 zx' :: Md.Model -> DAG a X -> L.LogFloat
-zx' crf = zxProbArray . forward sum crf
+zx' crf = zxBeta . backward sum crf
+
+-- | Normalization factor based on the backward table.
+zxBeta :: ProbArray -> L.LogFloat
+zxBeta pa = pa Beg Beg
 
 
 -- | Probability of chosing the given pair of edges and the corresponding labels.
@@ -176,8 +198,11 @@ edgeProb2
   -> Maybe EdgeIx
   -- ^ Previous edge and the corresponding label
   -> L.LogFloat
-edgeProb2 alpha beta u v =
-  alpha (Just u) v * beta (Just u) v / zxProbArray alpha
+edgeProb2 alpha beta u0 v0 =
+  alpha u v * beta u v / zxAlpha alpha
+  where
+    u = Mid u0
+    v = complicate Beg v0
 
 
 -- | Probability of chosing the given edge and the corresponding label.
