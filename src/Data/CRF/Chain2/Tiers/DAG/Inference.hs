@@ -1,31 +1,41 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE Rank2Types #-}
 
+
 module Data.CRF.Chain2.Tiers.DAG.Inference
-(
---   tag
--- -- , probs
--- , marginals
--- , expectedFeatures
--- , accuracy
--- , zx
--- , zx'
+( tag
+, tag'
+, tagK
+, marginals
+, accuracy
+, expectedFeaturesIn
+, zx
+, zx'
 ) where
 
 
+import           GHC.Conc (numCapabilities)
+
 import           Control.Applicative ((<$>))
+import qualified Control.Parallel as Par
+import qualified Control.Parallel.Strategies as Par
 
 import           Data.Number.LogFloat as L
 import qualified Data.Vector as V
 import qualified Data.Array as A
 import           Data.Maybe (fromJust)
 import qualified Data.MemoCombinators as Memo
+import qualified Data.List as List
+import           Data.Function (on)
+import qualified Data.Foldable as F
 
 import           Data.DAG (EdgeID, DAG)
 import qualified Data.DAG as DAG
 
-import           Data.CRF.Chain2.Tiers.Core
+import qualified Data.CRF.Chain2.Tiers.Core as C
+import           Data.CRF.Chain2.Tiers.Core (X, Y, Cb, CbIx)
 import qualified Data.CRF.Chain2.Tiers.Model as Md
+import           Data.CRF.Chain2.Tiers.Util (partition)
 import           Data.CRF.Chain2.Tiers.DAG.Feature (EdgeIx(..))
 import qualified Data.CRF.Chain2.Tiers.DAG.Feature as Ft
 
@@ -41,9 +51,9 @@ type AccF = [L.LogFloat] -> L.LogFloat
 
 -- | Position in the sentence.
 data Pos
-  = Beg
-  | Mid EdgeIx
-  | End
+  = Beg        -- ^ Before the beginning of the sentence
+  | Mid EdgeIx -- ^ Actual edge
+  | End        -- ^ After the end of the sentence
   deriving (Show, Eq, Ord)
 
 
@@ -187,6 +197,64 @@ zxBeta :: ProbArray -> L.LogFloat
 zxBeta pa = pa Beg Beg
 
 
+-- -- | Probability of chosing the given three edges and the corresponding labels.
+-- edgeProb3
+--   :: Md.Model
+--   -- ^ The underlying model
+--   -> DAG a X
+--   -- ^ The underlying DAG
+--   -> ProbArray
+--   -- ^ Forward probability table
+--   -> ProbArray
+--   -- ^ Backward probability table
+--   -> Int
+--   -- ^ Sentence position
+--   -> (CbIx -> L.LogFloat)
+--   -- ^ Memoized psi (onWord)
+--   -> CbIx
+--   -- ^ Corresponding to the current position `i`
+--   -> CbIx
+--   -- ^ Corresponding to the position `i - 1`
+--   -> CbIx
+--   -- ^ Corresponding to the position `i - 2`
+--   -> L.LogFloat
+-- edgeProb3 crf sent alpha beta k psiMem x y z =
+--     alpha (k - 1) y z * beta (k + 1) x y * psiMem x
+--     * onTransition crf sent k x y z / zxBeta beta
+
+
+-- | Probability of chosing the given three edges and the corresponding labels.
+edgeProb3
+  :: Md.Model
+  -- ^ The underlying model
+  -> DAG a X
+  -- ^ The underlying DAG
+  -> (EdgeIx -> L.LogFloat)
+  -- ^ Memoized psi (onWord)
+  -> ProbArray
+  -- ^ Forward probability table
+  -> ProbArray
+  -- ^ Backward probability table
+  -> EdgeIx
+  -- ^ Current edge and the corresponding label
+  -> Maybe EdgeIx
+  -- ^ Previous edge and the corresponding label
+  -> Maybe EdgeIx
+  -- ^ One before the previous edge and the corresponding label
+  -> L.LogFloat
+-- edgeProb3 crf dag psi alpha beta x y z =
+edgeProb3 crf dag psi alpha beta u0 v0 w0
+  = alpha v w
+  * beta u v
+  * psi u0
+  * onTransition crf dag (Just u0) v0 w0
+  / zxBeta beta
+  where
+   u = Mid u0
+   v = complicate Beg v0
+   w = complicate Beg w0
+
+
 -- | Probability of chosing the given pair of edges and the corresponding labels.
 edgeProb2
   :: ProbArray
@@ -223,13 +291,125 @@ edgeProb1 dag alpha beta u = sum
 
 -- | Tag potential labels with marginal probabilities.
 -- marginals :: Md.Model -> DAG a X -> DAG a [(Lb, L.LogFloat)]
-marginals :: Md.Model -> DAG a X -> DAG a [L.LogFloat]
+marginals :: Md.Model -> DAG a X -> DAG a [(CbIx, L.LogFloat)]
 marginals crf dag =
   DAG.mapE label dag
   where
     label edgeID _ =
-      [ prob1 edgeIx
+      [ (Ft.lbIx edgeIx, prob1 edgeIx)
       | edgeIx <- Ft.edgeIxs dag edgeID ]
     prob1 = edgeProb1 dag alpha beta
     alpha = forward sum crf dag
     beta = backward sum crf dag
+
+
+-- | Get (at most) k best tags for each word and return them in
+-- descending order.  TODO: Tagging with respect to marginal
+-- distributions might not be the best idea.  Think of some
+-- more elegant method.
+tagK :: Int -> Md.Model -> DAG a X -> DAG a [(CbIx, L.LogFloat)]
+tagK k crf dag = fmap
+    ( take k
+    . reverse
+    . List.sortBy (compare `on` snd)
+    ) (marginals crf dag)
+
+
+-- | Find the most probable label sequence (with probabilities of individual
+-- lables determined with respect to marginal distributions) satisfying the
+-- constraints imposed over label values.
+tag :: Md.Model -> DAG a X -> DAG a CbIx
+tag crf = fmap (fst . head) . tagK 1 crf
+
+
+-- | Similar to `tag` but directly returns complex labels and not just their
+-- `CbIx` indexes.
+tag' :: Md.Model -> DAG a X -> DAG a Cb
+tag' crf dag
+  = fmap (uncurry C.lbAt)
+  $ DAG.zipE dag (tag crf dag)
+
+
+expectedFeaturesOn
+  :: Md.Model
+  -- ^ CRF model
+  -> DAG a X
+  -- ^ The underlying sentence DAG
+  -> ProbArray
+  -- ^ Forward computation table
+  -> ProbArray
+  -- ^ Backward computation table
+  -> EdgeID
+  -- ^ ID of an edge of the underlying DAG
+  -> [(C.Feat, L.LogFloat)]
+expectedFeaturesOn crf dag alpha beta edgeID =
+  fs1 ++ fs3
+  where
+    psi = memoEdgeIx dag $ onWord crf dag
+    prob1 = edgeProb1 dag alpha beta
+    prob3 = edgeProb3 crf dag psi alpha beta
+
+    fs1 =
+      [ (ft, prob)
+      | edgeIx <- Ft.edgeIxs dag edgeID
+      , let prob = prob1 edgeIx
+      , ft <- Ft.obFeatsOn dag edgeIx ]
+
+    fs3 =
+      [ (ft, prob)
+      | u <- Just <$> Ft.edgeIxs dag edgeID
+      , v <- Ft.prevEdgeIxs dag (Ft.edgeID <$> u)
+      , w <- Ft.prevEdgeIxs dag (Ft.edgeID <$> v)
+      , let prob = prob3 (fromJust u) v w
+      , ft <- Ft.trFeatsOn dag u v w ]
+
+
+-- | A list of features defined within the context of the sentence accompanied
+-- by expected probabilities determined on the basis of the model.
+--
+-- One feature can occur multiple times in the output list.
+expectedFeaturesIn
+  :: Md.Model
+  -> DAG a X
+  -> [(C.Feat, L.LogFloat)]
+expectedFeaturesIn crf dag = zxF `Par.par` zxB `Par.pseq` zxF `Par.pseq`
+    concat [expectedOn edgeID | edgeID <- DAG.dagEdges dag]
+  where
+    expectedOn = expectedFeaturesOn crf dag alpha beta
+    alpha = forward sum crf dag
+    beta = backward sum crf dag
+    zxF = zxAlpha alpha
+    zxB = zxBeta beta
+
+
+goodAndBad :: Md.Model -> DAG a (X, Y) -> (Int, Int)
+goodAndBad crf dag =
+    F.foldl' gather (0, 0) $ DAG.zipE labels labels'
+  where
+    xs = fmap fst dag
+    ys = fmap snd dag
+    labels = fmap (best . C.unY) ys
+    best zs
+      | null zs   = Nothing
+      | otherwise = Just . fst $ List.maximumBy (compare `on` snd) zs
+    labels' = fmap Just $ tag' crf xs
+    gather (good, bad) (x, y)
+      | x == y = (good + 1, bad)
+      | otherwise = (good, bad + 1)
+
+
+goodAndBad' :: Md.Model -> [DAG a (X, Y)] -> (Int, Int)
+goodAndBad' crf dataset =
+    let add (g, b) (g', b') = (g + g', b + b')
+    in  F.foldl' add (0, 0) [goodAndBad crf x | x <- dataset]
+
+
+-- | Compute the accuracy of the model with respect to the labeled dataset.
+accuracy :: Md.Model -> [DAG a (X, Y)] -> Double
+accuracy crf dataset =
+    let k = numCapabilities
+    	parts = partition k dataset
+        xs = Par.parMap Par.rseq (goodAndBad' crf) parts
+        (good, bad) = F.foldl' add (0, 0) xs
+        add (g, b) (g', b') = (g + g', b + b')
+    in  fromIntegral good / fromIntegral (good + bad)
