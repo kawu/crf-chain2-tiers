@@ -102,7 +102,7 @@ mkLb = Lb . fromIntegral
 {-# INLINE mkLb #-}
 
 
--- | Deconstract label.
+-- | Deconstruct label.
 unLb :: Lb -> Int
 unLb = fromIntegral . _unLb
 {-# INLINE unLb #-}

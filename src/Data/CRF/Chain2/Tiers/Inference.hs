@@ -34,6 +34,33 @@ type AccF = [L.LogFloat] -> L.LogFloat
 
 type ProbArray = CbIx -> CbIx -> CbIx -> L.LogFloat
 
+
+----------------------------------------------------
+-- Potential
+----------------------------------------------------
+
+
+-- | Observation potential on a given position and a
+-- given label (identified by index).
+onWord :: Model -> Xs -> Int -> CbIx -> L.LogFloat
+onWord crf xs i u =
+    product . map (phi crf) $ obFeatsOn xs i u
+{-# INLINE onWord #-}
+
+
+-- | Transition potential on a given position and a
+-- given labels (identified by indexes).
+onTransition :: Model -> Xs -> Int -> CbIx -> CbIx -> CbIx -> L.LogFloat
+onTransition crf xs i u w v =
+    product . map (phi crf) $ trFeatsOn xs i u w v
+{-# INLINE onTransition #-}
+
+
+----------------------------------------------------
+-- More complex stuff
+----------------------------------------------------
+
+
 computePsi :: Model -> Xs -> Int -> CbIx -> L.LogFloat
 computePsi crf xs i = (A.!) $ A.array (0, lbNum xs i - 1)
     [ (k, onWord crf xs i k)

@@ -36,6 +36,7 @@ library
       , sgd                     >= 0.3.2        && < 0.4
       , vector-th-unbox         >= 0.2.1        && < 0.3
       , pedestrian-dag          >= 0.1          && < 0.2
+      , data-memocombinators    >= 0.5          && < 0.6
 
     exposed-modules:
         Data.CRF.Chain2.Tiers
@@ -51,6 +52,7 @@ library
       , Data.CRF.Chain2.Tiers.DAG.Feature
       , Data.CRF.Chain2.Tiers.DAG.Dataset.External
       , Data.CRF.Chain2.Tiers.DAG.Dataset.Codec
+      , Data.CRF.Chain2.Tiers.DAG.Inference
 
     other-modules:
         Data.CRF.Chain2.Tiers.Util
