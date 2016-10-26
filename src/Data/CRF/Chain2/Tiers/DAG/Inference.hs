@@ -83,9 +83,18 @@ type ProbArray = Pos -> Pos -> L.LogFloat
 
 memoProbArray :: DAG a X -> ProbArray -> ProbArray
 memoProbArray dag =
-  Memo.memo2 memoPos memoPos
+  let memo = memoPos dag
+  in  Memo.memo2 memo memo
+
+
+memoPos :: DAG a X -> Memo.Memo Pos
+memoPos dag f =
+  table (f Beg) (memo (f . Mid)) (f End)
   where
-    memoPos = undefined -- Memo.maybe (memoEdgeIx dag)
+    memo = memoEdgeIx dag
+    table b m e Beg = b
+    table b m e (Mid x) = m x
+    table b m e End = e
 
 
 memoEdgeIx :: DAG a X -> Memo.Memo EdgeIx
