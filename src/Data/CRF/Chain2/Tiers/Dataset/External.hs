@@ -37,17 +37,21 @@ type Sent a b = [Word a b]
 newtype Prob a = Prob { unProb :: M.Map a Double }
     deriving (Show, Eq, Ord)
 
+-- -- | Construct the probability distribution.
+-- mkProb :: Ord a => [(a, Double)] -> Prob a
+-- mkProb =
+--     Prob . normalize . M.fromListWith (+) . filter ((>0).snd)
+--   where
+--     normalize dist
+--         | M.null dist =
+--             error "mkProb: no elements with positive probability"
+--         | otherwise   =
+--             let z = sum (M.elems dist)
+--             in  fmap (/z) dist
+
 -- | Construct the probability distribution.
 mkProb :: Ord a => [(a, Double)] -> Prob a
-mkProb =
-    Prob . normalize . M.fromListWith (+) . filter ((>0).snd)
-  where
-    normalize dist
-        | M.null dist =
-            error "mkProb: no elements with positive probability"
-        | otherwise   =
-            let z = sum (M.elems dist)
-            in  fmap (/z) dist
+mkProb = Prob . M.fromListWith (+) . filter ((>0).snd)
 
 -- | A WordL is a labeled word, i.e. a word with probability distribution
 -- defined over labels.  We assume that every label from the distribution
