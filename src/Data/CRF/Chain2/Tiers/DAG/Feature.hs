@@ -18,6 +18,11 @@ module Data.CRF.Chain2.Tiers.DAG.Feature
 , obFeatsOn
 , trFeatsOn
 
+-- * Feature selection
+, FeatSel
+, selectPresent
+, selectHidden
+
 -- * Indexing
 , lbNum
 , lbIxs
@@ -263,3 +268,22 @@ hiddenFeats dag =
       , u <- Just <$> edgeIxs dag i
       , v <- prevEdgeIxs dag (edgeID <$> u)
       , w <- prevEdgeIxs dag (edgeID <$> v) ]
+
+
+----------------------------------------------------
+-- Feature selection
+----------------------------------------------------
+
+
+-- | A feature selection function type.
+type FeatSel a = DAG a (X, Y) -> [Feat]
+
+
+-- | The 'presentFeats' adapted to fit feature selection specs.
+selectPresent :: FeatSel a
+selectPresent = map fst . presentFeats
+
+
+-- | The 'hiddenFeats' adapted to fit feature selection specs.
+selectHidden :: FeatSel a
+selectHidden = hiddenFeats . fmap fst

@@ -18,9 +18,13 @@ module Data.CRF.Chain2.Tiers.DAG
 -- , tag
 , marginals
 
--- * Modules
+-- * Dataset
 , module Data.CRF.Chain2.Tiers.DAG.Dataset.External
--- , module Data.CRF.Chain2.Tiers.DAG.Feature
+
+-- * Feature selection
+, Feat.FeatSel
+, Feat.selectHidden
+, Feat.selectPresent
 ) where
 
 
@@ -38,7 +42,7 @@ import qualified Numeric.SGD.LogSigned as L
 import           Data.DAG (DAG)
 import qualified Data.DAG as DAG
 
-import           Data.CRF.Chain2.Tiers.Core (X, Y) --, Ob, Cb, CbIx, Feat)
+import           Data.CRF.Chain2.Tiers.Core (X, Y)
 import qualified Data.CRF.Chain2.Tiers.Core as Core
 import qualified Data.CRF.Chain2.Tiers.Model as Model
 import           Data.CRF.Chain2.Tiers.Model (Model)
@@ -48,6 +52,7 @@ import           Data.CRF.Chain2.Tiers.DAG.Dataset.External
 import qualified Data.CRF.Chain2.Tiers.DAG.Dataset.Codec as Codec
 import           Data.CRF.Chain2.Tiers.DAG.Dataset.Codec (Codec)
 import qualified Data.CRF.Chain2.Tiers.DAG.Feature as Feat
+import           Data.CRF.Chain2.Tiers.DAG.Feature (Feat, FeatSel)
 import qualified Data.CRF.Chain2.Tiers.DAG.Inference as Inf
 
 
@@ -84,10 +89,10 @@ prune x crf =  crf { model = newModel } where
 
 
 -- | Construct model from a dataset given a feature selection function.
-mkModel :: [DAG a (X, Y)] -> Model
-mkModel
+mkModel :: (DAG a (X, Y) -> [Feat]) -> [DAG a (X, Y)] -> Model
+mkModel featSel
   = Model.fromSet . S.fromList
-  . concatMap (map fst . Feat.presentFeats)
+  . concatMap featSel -- (map fst . Feat.presentFeats)
 
 
 ----------------------------------------------------
@@ -97,14 +102,15 @@ mkModel
 
 -- | Train the CRF using the stochastic gradient descent method.
 train
-    :: (Ord a, Ord b)
-    => Int                          -- ^ Number of layers (tiers)
-    -> SGD.SgdArgs                  -- ^ SGD parameters
-    -> Bool                         -- ^ Store dataset on a disk
-    -> IO [SentL a b]               -- ^ Training data 'IO' action
-    -> IO [SentL a b]               -- ^ Evaluation data
-    -> IO (CRF a b)                 -- ^ Resulting model
-train numOfLayers sgdArgs onDisk trainIO evalIO = do
+  :: (Ord a, Ord b)
+  => Int                          -- ^ Number of layers (tiers)
+  -> Feat.FeatSel ()              -- ^ Feature selection
+  -> SGD.SgdArgs                  -- ^ SGD parameters
+  -> Bool                         -- ^ Store dataset on a disk
+  -> IO [SentL a b]               -- ^ Training data 'IO' action
+  -> IO [SentL a b]               -- ^ Evaluation data
+  -> IO (CRF a b)                 -- ^ Resulting model
+train numOfLayers featSel sgdArgs onDisk trainIO evalIO = do
     hSetBuffering stdout NoBuffering
 
     -- Create codec and encode the training dataset
@@ -117,7 +123,7 @@ train numOfLayers sgdArgs onDisk trainIO evalIO = do
     SGD.withData onDisk evalData_ $ \evalData -> do
 
     -- Train the model
-    model <- mkModel <$> SGD.loadData trainData
+    model <- mkModel featSel <$> SGD.loadData trainData
     para  <- SGD.sgd sgdArgs
         (notify sgdArgs model trainData evalData)
         (gradOn model) trainData (Model.values model)
