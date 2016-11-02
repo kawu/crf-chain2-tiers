@@ -17,6 +17,8 @@ module Data.CRF.Chain2.Tiers.DAG
 -- * Tagging
 -- , tag
 , marginals
+, Inf.ProbType (..)
+, probs
 
 -- * Dataset
 , module Data.CRF.Chain2.Tiers.DAG.Dataset.External
@@ -217,6 +219,22 @@ marginals CRF{..} sent
   = fmap decodeChosen
   . DAG.zipE sent
   . Inf.marginals' model
+  . Codec.encodeSent codec
+  $ sent
+  where
+    decodeChosen (word, chosen) = (word,) $ mkProb
+      [ (decode word x, LogFloat.fromLogFloat p)
+      | (x, p) <- chosen ]
+      where
+    decode word = Codec.unJust codec word . Codec.decodeLabel codec
+
+
+-- | Tag labels with marginal probabilities.
+probs :: (Ord a, Ord b) => Inf.ProbType -> CRF a b -> Sent a b -> SentL a b
+probs probTyp CRF{..} sent
+  = fmap decodeChosen
+  . DAG.zipE sent
+  . Inf.probs' probTyp model
   . Codec.encodeSent codec
   $ sent
   where

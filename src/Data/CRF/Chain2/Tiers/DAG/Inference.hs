@@ -8,6 +8,9 @@ module Data.CRF.Chain2.Tiers.DAG.Inference
 , tagK
 , marginals
 , marginals'
+, ProbType (..)
+, probs
+, probs'
 , accuracy
 , expectedFeaturesIn
 , zx
@@ -285,7 +288,10 @@ edgeProb2 alpha beta u0 v0 =
 
 -- | Probability of chosing the given edge and the corresponding label.
 edgeProb1
-  :: DAG a X
+  :: AccF
+  -- ^ Accumulating function (should be the same as the one used to
+  -- compute forward and backward tables)
+  -> DAG a X
   -- ^ The underlying sentence DAG
   -> ProbArray
   -- ^ Forward probability table
@@ -294,7 +300,7 @@ edgeProb1
   -> EdgeIx
   -- ^ Edge and the corresponding label
   -> L.LogFloat
-edgeProb1 dag alpha beta u = sum
+edgeProb1 acc dag alpha beta u = acc -- sum
   [ edgeProb2 alpha beta u v
   | v <- Ft.prevEdgeIxs dag (Just $ edgeID u) ]
 
@@ -307,16 +313,66 @@ marginals crf dag =
     label edgeID _ =
       [ (Ft.lbIx edgeIx, prob1 edgeIx)
       | edgeIx <- Ft.edgeIxs dag edgeID ]
-    prob1 = edgeProb1 dag alpha beta
+    prob1 = edgeProb1 sum dag alpha beta
     alpha = forward sum crf dag
     beta = backward sum crf dag
 
 
 -- | Tag potential labels with marginal probabilities.
 marginals' :: Md.Model -> DAG a X -> DAG a [(Cb, L.LogFloat)]
-marginals' crf dag
+marginals' crf dag = mergeProbs dag (marginals crf dag)
+
+
+-- -- | Tag potential labels with alternative probabilities.
+-- -- TODO: explain what is that exactly.
+-- probs :: Md.Model -> DAG a X -> DAG a [(CbIx, L.LogFloat)]
+-- probs crf dag =
+--   DAG.mapE label dag
+--   where
+--     label edgeID _ =
+--       [ (Ft.lbIx edgeIx, prob1 edgeIx)
+--       | edgeIx <- Ft.edgeIxs dag edgeID ]
+--     prob1 = edgeProb1 maximum dag alpha beta
+--     alpha = forward maximum crf dag
+--     beta = backward maximum crf dag
+
+
+-- | Type of resulting probabilities.
+data ProbType
+  = Marginals
+  -- ^ Marginal probabilities
+  | MaxProbs
+  -- ^ TODO
+
+
+-- | Tag potential labels with alternative probabilities.
+-- TODO: explain what is that exactly.
+probs :: ProbType -> Md.Model -> DAG a X -> DAG a [(CbIx, L.LogFloat)]
+probs probTyp crf dag =
+  DAG.mapE label dag
+  where
+    label edgeID _ =
+      [ (Ft.lbIx edgeIx, prob1 edgeIx)
+      | edgeIx <- Ft.edgeIxs dag edgeID ]
+    prob1 = edgeProb1 acc dag alpha beta
+    alpha = forward acc crf dag
+    beta = backward acc crf dag
+    acc = case probTyp of
+      Marginals -> sum
+      MaxProbs  -> maximum
+
+
+-- | Tag potential labels with alternative probabilities.
+-- TODO: explain what is that exactly.
+probs' :: ProbType -> Md.Model -> DAG a X -> DAG a [(Cb, L.LogFloat)]
+probs' typ crf dag = mergeProbs dag (probs typ crf dag)
+
+
+-- | Utility function useful for `margilans'` and `probs'`.
+mergeProbs :: DAG a X -> DAG a [(CbIx, L.LogFloat)] -> DAG a [(Cb, L.LogFloat)]
+mergeProbs dag
   = fmap lbAt
-  $ DAG.zipE dag (marginals crf dag)
+  . DAG.zipE dag
   where
     lbAt (x, ys) =
       [ (C.lbAt x cbIx, pr)
@@ -366,7 +422,7 @@ expectedFeaturesOn crf dag alpha beta edgeID =
   fs1 ++ fs3
   where
     psi = memoEdgeIx dag $ onWord crf dag
-    prob1 = edgeProb1 dag alpha beta
+    prob1 = edgeProb1 sum dag alpha beta
     prob3 = edgeProb3 crf dag psi alpha beta
 
     fs1 =
