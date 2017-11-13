@@ -152,6 +152,7 @@ tag crf sent =
 --         beta = backward maximum crf sent
 --         normalize xs =
 --             let d = - sum xs
+--             -- UPDATE 13/11/2017: maybe it doesn't work because of that?
 --             in map (*d) xs
 --         m1 k x = maximum
 --             [ alpha k x y * beta (k + 1) x y
@@ -191,7 +192,7 @@ goodAndBad' crf dataset =
 accuracy :: Model -> [(Xs, Ys)] -> Double
 accuracy crf dataset =
     let k = numCapabilities
-    	parts = partition k dataset
+        parts = partition k dataset
         xs = parMap rseq (goodAndBad' crf) parts
         (good, bad) = foldl add (0, 0) xs
         add (g, b) (g', b') = (g + g', b + b')
@@ -228,11 +229,11 @@ expectedFeaturesOn crf alpha beta sent k =
     where psi = computePsi crf sent k
           pr1 = prob1 crf alpha beta sent k
           pr3 = prob3 crf alpha beta sent k psi
-          fs1 = [ (ft, pr) 
+          fs1 = [ (ft, pr)
                 | a <- lbIxs sent k
                 , let pr = pr1 a
                 , ft <- obFs a ]
-    	  fs3 = [ (ft, pr) 
+          fs3 = [ (ft, pr)
                 | a <- lbIxs sent k
                 , b <- lbIxs sent $ k - 1
                 , c <- lbIxs sent $ k - 2

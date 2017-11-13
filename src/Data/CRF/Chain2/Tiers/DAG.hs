@@ -37,6 +37,7 @@ import           Data.Maybe (maybeToList)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import           Data.Binary (Binary, get, put)
+import qualified Data.Vector.Unboxed as U
 import qualified Data.Number.LogFloat as LogFloat
 import qualified Numeric.SGD as SGD
 import qualified Numeric.SGD.LogSigned as L
@@ -181,11 +182,15 @@ notify
     -> SGD.Para -> Int -> IO ()
 notify SGD.SgdArgs{..} model trainData evalData para k
   | doneTotal k == doneTotal (k - 1) = putStr "."
-  | SGD.size evalData > 0 = do
-      x <- Inf.accuracy (model { Model.values = para }) <$> SGD.loadData evalData
-      putStrLn ("\n" ++ "[" ++ show (doneTotal k) ++ "] f = " ++ show x)
-  | otherwise =
-      putStrLn ("\n" ++ "[" ++ show (doneTotal k) ++ "] f = #")
+  | otherwise = do
+      acc <-
+        if SGD.size evalData > 0
+        then show . Inf.accuracy (model { Model.values = para }) <$> SGD.loadData evalData
+        else return "#"
+      putStrLn $
+        "\n" ++ "[" ++ show (doneTotal k) ++ "] acc = " ++ acc ++
+        ", minVal = " ++ show (U.minimum para) ++
+        ", maxVal = " ++ show (U.maximum para)
   where
     doneTotal :: Int -> Int
     doneTotal = floor . done

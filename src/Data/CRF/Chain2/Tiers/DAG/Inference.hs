@@ -27,6 +27,7 @@ import qualified Control.Parallel.Strategies as Par
 import           Data.Number.LogFloat as L
 import qualified Data.Vector as V
 import qualified Data.Array as A
+import qualified Data.Set as S
 import           Data.Maybe (fromJust)
 import qualified Data.MemoCombinators as Memo
 import qualified Data.List as List
@@ -460,18 +461,36 @@ expectedFeaturesIn crf dag = zxF `Par.par` zxB `Par.pseq` zxF `Par.pseq`
 
 goodAndBad :: Md.Model -> DAG a (X, Y) -> (Int, Int)
 goodAndBad crf dag =
+
     F.foldl' gather (0, 0) $ DAG.zipE labels labels'
+
   where
-    xs = fmap fst dag
-    ys = fmap snd dag
-    labels = fmap (best . C.unY) ys
+
+    gather (good, bad) results =
+      if consistent results
+      then (good + 1, bad)
+      else (good, bad + 1)
+
+    consistent results = case results of
+      (Just xs, Just ys) -> (not . S.null) (S.intersection xs ys)
+      (Nothing, Nothing) -> True
+      _ -> False
+
+    labels' = fmap best $ probs' MaxProbs crf (fmap fst dag)
+    labels  = fmap (best . C.unY)    (fmap snd dag)
+
     best zs
       | null zs   = Nothing
-      | otherwise = Just . fst $ List.maximumBy (compare `on` snd) zs
-    labels' = fmap Just $ tag' crf xs
-    gather (good, bad) (x, y)
-      | x == y = (good + 1, bad)
-      | otherwise = (good, bad + 1)
+      | otherwise =
+          let maxProb = maximum (map snd zs)
+          in  if maxProb < eps
+              then Nothing
+              else Just
+                   . S.fromList . map fst
+                   . filter ((>= maxProb - eps) . snd)
+                   $ zs
+    eps = 1.0e-9
+
 
 
 goodAndBad' :: Md.Model -> [DAG a (X, Y)] -> (Int, Int)
