@@ -189,8 +189,8 @@ notify SGD.SgdArgs{..} model trainData evalData para k
         else return "#"
       putStrLn $
         "\n" ++ "[" ++ show (doneTotal k) ++ "] acc = " ++ acc ++
-        ", minVal = " ++ show (U.minimum para) ++
-        ", maxVal = " ++ show (U.maximum para)
+        ", min(params) = " ++ show (U.minimum para) ++
+        ", max(params) = " ++ show (U.maximum para)
   where
     doneTotal :: Int -> Int
     doneTotal = floor . done
