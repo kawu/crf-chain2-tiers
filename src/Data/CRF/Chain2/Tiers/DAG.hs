@@ -39,7 +39,7 @@ import qualified Data.Set as S
 import           Data.Binary (Binary, get, put)
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Number.LogFloat as LogFloat
-import qualified Numeric.SGD as SGD
+import qualified Numeric.SGD.Momentum as SGD
 import qualified Numeric.SGD.LogSigned as L
 
 import           Data.DAG (DAG)
