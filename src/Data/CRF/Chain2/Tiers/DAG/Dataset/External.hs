@@ -5,6 +5,7 @@ module Data.CRF.Chain2.Tiers.DAG.Dataset.External
 ) where
 
 
+import Prelude hiding (Word)
 import qualified Data.DAG as DAG
 import           Data.DAG (DAG)
 

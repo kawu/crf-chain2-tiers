@@ -72,7 +72,7 @@ import           Data.CRF.Chain2.Tiers.Array (Bounds)
 
 -- | An observation.
 newtype Ob = Ob { _unOb :: Int32 }
-    deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray )
+    deriving (Show, Eq, Ord, Binary)
 --           GeneralizedNewtypeDeriving doesn't work for this in 7.8.2:
 --           , G.Vector U.Vector, G.MVector U.MVector, U.Unbox )
 derivingUnbox "Ob" [t| Ob -> Int32 |] [| _unOb |] [| Ob |]
@@ -91,8 +91,7 @@ unOb = fromIntegral . _unOb
 
 -- | An atomic label.
 newtype Lb = Lb { _unLb :: Int16 }
-    deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray
-             , Num, Ix, Bounds)
+    deriving (Show, Eq, Ord, Binary , Num, Ix, Bounds)
 derivingUnbox "Lb" [t| Lb -> Int16 |] [| _unLb |] [| Lb |]
 
 
@@ -114,7 +113,7 @@ type CbIx = Int
 
 -- | A feature index.  To every model feature a unique index is assigned.
 newtype FeatIx = FeatIx { _unFeatIx :: Int32 }
-    deriving ( Show, Eq, Ord, Binary, A.IArray A.UArray )
+    deriving (Show, Eq, Ord, Binary)
 derivingUnbox "FeatIx" [t| FeatIx -> Int32 |] [| _unFeatIx |] [| FeatIx |]
 
 -- | Smart feature index constructor.

@@ -10,6 +10,7 @@ module Data.CRF.Chain2.Tiers.Dataset.External
 , SentL
 ) where
 
+import Prelude hiding (Word)
 import qualified Data.Set as S
 import qualified Data.Map as M
 

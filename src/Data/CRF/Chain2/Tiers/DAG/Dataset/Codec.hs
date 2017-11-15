@@ -15,6 +15,7 @@ module Data.CRF.Chain2.Tiers.DAG.Dataset.Codec
 ) where
 
 
+-- import           Prelude hiding (Word)
 import qualified Data.Traversable as T
 import           Data.DAG (DAG)
 

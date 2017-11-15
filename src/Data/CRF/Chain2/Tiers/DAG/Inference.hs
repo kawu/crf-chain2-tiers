@@ -24,7 +24,7 @@ import           Control.Applicative ((<$>))
 import qualified Control.Parallel as Par
 import qualified Control.Parallel.Strategies as Par
 
-import           Data.Number.LogFloat as L
+import qualified Data.Number.LogFloat as L
 import qualified Data.Vector as V
 import qualified Data.Array as A
 import qualified Data.Set as S
@@ -120,7 +120,7 @@ memoEdgeIx dag =
 -- given label (identified by index).
 onWord :: Md.Model -> DAG a X -> EdgeIx -> L.LogFloat
 onWord crf dag
-  = product
+  = L.product
   . map (Md.phi crf)
   . Ft.obFeatsOn dag
 {-# INLINE onWord #-}
@@ -136,7 +136,7 @@ onTransition
   -> Maybe EdgeIx
   -> L.LogFloat
 onTransition crf dag u w v
-  = product
+  = L.product
   . map (Md.phi crf)
   $ Ft.trFeatsOn dag u w v
 {-# INLINE onTransition #-}
@@ -194,7 +194,7 @@ backward acc crf dag =
 -- | Normalization factor computed for the sentence using the forward
 -- computation.
 zx :: Md.Model -> DAG a X -> L.LogFloat
-zx crf = zxAlpha . forward sum crf
+zx crf = zxAlpha . forward L.sum crf
 
 -- | Normalization factor based on the forward table.
 zxAlpha :: ProbArray -> L.LogFloat
@@ -204,7 +204,7 @@ zxAlpha pa = pa End End
 -- | Normalization factor computed for the sentence using the backward
 -- computation.
 zx' :: Md.Model -> DAG a X -> L.LogFloat
-zx' crf = zxBeta . backward sum crf
+zx' crf = zxBeta . backward L.sum crf
 
 -- | Normalization factor based on the backward table.
 zxBeta :: ProbArray -> L.LogFloat
@@ -314,9 +314,9 @@ marginals crf dag =
     label edgeID _ =
       [ (Ft.lbIx edgeIx, prob1 edgeIx)
       | edgeIx <- Ft.edgeIxs dag edgeID ]
-    prob1 = edgeProb1 sum dag alpha beta
-    alpha = forward sum crf dag
-    beta = backward sum crf dag
+    prob1 = edgeProb1 L.sum dag alpha beta
+    alpha = forward L.sum crf dag
+    beta = backward L.sum crf dag
 
 
 -- | Tag potential labels with marginal probabilities.
@@ -359,7 +359,7 @@ probs probTyp crf dag =
     alpha = forward acc crf dag
     beta = backward acc crf dag
     acc = case probTyp of
-      Marginals -> sum
+      Marginals -> L.sum
       MaxProbs  -> maximum
 
 
@@ -423,7 +423,7 @@ expectedFeaturesOn crf dag alpha beta edgeID =
   fs1 ++ fs3
   where
     psi = memoEdgeIx dag $ onWord crf dag
-    prob1 = edgeProb1 sum dag alpha beta
+    prob1 = edgeProb1 L.sum dag alpha beta
     prob3 = edgeProb3 crf dag psi alpha beta
 
     fs1 =
@@ -453,8 +453,8 @@ expectedFeaturesIn crf dag = zxF `Par.par` zxB `Par.pseq` zxF `Par.pseq`
     concat [expectedOn edgeID | edgeID <- DAG.dagEdges dag]
   where
     expectedOn = expectedFeaturesOn crf dag alpha beta
-    alpha = forward sum crf dag
-    beta = backward sum crf dag
+    alpha = forward L.sum crf dag
+    beta = backward L.sum crf dag
     zxF = zxAlpha alpha
     zxB = zxBeta beta
 
