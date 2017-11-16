@@ -144,15 +144,15 @@ train numOfLayers featSel sgdArgs onDisk trainIO evalIO = do
 --     -> IO (CRF a b)                 -- ^ Resulting model
 -- reTrain crf sgdArgs onDisk trainIO evalIO = do
 --     hSetBuffering stdout NoBuffering
--- 
+--
 --     -- Encode the training dataset
 --     trainData_ <- encodeDataL (codec crf) <$> trainIO
 --     SGD.withData onDisk trainData_ $ \trainData -> do
--- 
+--
 --     -- Encode the evaluation dataset
 --     evalData_ <- encodeDataL (codec crf) <$> evalIO
 --     SGD.withData onDisk evalData_ $ \evalData -> do
--- 
+--
 --     -- Train the model
 --     let model' = model crf
 --     para  <- SGD.sgd sgdArgs
@@ -183,15 +183,23 @@ notify
 notify SGD.SgdArgs{..} model trainData evalData para k
   | doneTotal k == doneTotal (k - 1) = putStr "."
   | otherwise = do
+      putStrLn "" >> report para
+--       report $ U.map (*50.0) para
+--       report $ U.map (*10.0) para
+--       report $ U.map (*2.0) para
+--       report $ U.map (*0.9) para
+--       report $ U.map (*0.5) para
+--       report $ U.map (*0.1) para
+  where
+    report para = do
       acc <-
         if SGD.size evalData > 0
         then show . Inf.accuracy (model { Model.values = para }) <$> SGD.loadData evalData
         else return "#"
       putStrLn $
-        "\n" ++ "[" ++ show (doneTotal k) ++ "] acc = " ++ acc ++
+        "[" ++ show (doneTotal k) ++ "] acc = " ++ acc ++
         ", min(params) = " ++ show (U.minimum para) ++
         ", max(params) = " ++ show (U.maximum para)
-  where
     doneTotal :: Int -> Int
     doneTotal = floor . done
     done :: Int -> Double
