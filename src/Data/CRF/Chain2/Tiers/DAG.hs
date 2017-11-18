@@ -17,7 +17,7 @@ module Data.CRF.Chain2.Tiers.DAG
 -- * Tagging
 -- , tag
 , marginals
-, Inf.ProbType (..)
+, I.ProbType (..)
 , probs
 
 -- * Dataset
@@ -56,7 +56,8 @@ import qualified Data.CRF.Chain2.Tiers.DAG.Dataset.Codec as Codec
 import           Data.CRF.Chain2.Tiers.DAG.Dataset.Codec (Codec)
 import qualified Data.CRF.Chain2.Tiers.DAG.Feature as Feat
 import           Data.CRF.Chain2.Tiers.DAG.Feature (Feat, FeatSel)
-import qualified Data.CRF.Chain2.Tiers.DAG.Inference as Inf
+import qualified Data.CRF.Chain2.Tiers.DAG.Inference as I
+import qualified Data.CRF.Chain2.Tiers.DAG.Probs as P
 
 
 ----------------------------------------------------
@@ -169,7 +170,7 @@ gradOn model para dag = SGD.fromLogList $
     | (ft, val) <- Feat.presentFeats dag
     , ix <- maybeToList (Model.index curr ft) ] ++
     [ (Core.unFeatIx ix, L.fromNeg val)
-    | (ft, val) <- Inf.expectedFeaturesIn curr (fmap fst dag)
+    | (ft, val) <- I.expectedFeaturesIn curr (fmap fst dag)
     , ix <- maybeToList (Model.index curr ft) ]
   where
     curr = model { Model.values = para }
@@ -191,15 +192,33 @@ notify SGD.SgdArgs{..} model trainData evalData para k
 --       report $ U.map (*0.5) para
 --       report $ U.map (*0.1) para
   where
+
     report para = do
+      let crf = model {Model.values = para}
+      llh <- show
+        . LogFloat.logFromLogFloat
+        . P.parLikelihood crf
+        <$> SGD.loadData trainData
       acc <-
         if SGD.size evalData > 0
-        then show . Inf.accuracy (model { Model.values = para }) <$> SGD.loadData evalData
+        then show . I.accuracy crf <$> SGD.loadData evalData
         else return "#"
-      putStrLn $
-        "[" ++ show (doneTotal k) ++ "] acc = " ++ acc ++
-        ", min(params) = " ++ show (U.minimum para) ++
-        ", max(params) = " ++ show (U.maximum para)
+      putStrLn $ "[" ++ show (doneTotal k) ++ "] stats:"
+      putStrLn $ "min(params) = " ++ show (U.minimum para)
+      putStrLn $ "max(params) = " ++ show (U.maximum para)
+      putStrLn $ "log(likelihood(train)) = " ++ llh
+      putStrLn $ "acc(eval) = " ++ acc
+
+--     report para = do
+--       acc <-
+--         if SGD.size evalData > 0
+--         then show . I.accuracy (model { Model.values = para }) <$> SGD.loadData evalData
+--         else return "#"
+--       putStrLn $
+--         "[" ++ show (doneTotal k) ++ "] acc = " ++ acc ++
+--         ", min(params) = " ++ show (U.minimum para) ++
+--         ", max(params) = " ++ show (U.maximum para)
+
     doneTotal :: Int -> Int
     doneTotal = floor . done
     done :: Int -> Double
@@ -231,7 +250,7 @@ marginals :: (Ord a, Ord b) => CRF a b -> Sent a b -> SentL a b
 marginals CRF{..} sent
   = fmap decodeChosen
   . DAG.zipE sent
-  . Inf.marginals' model
+  . I.marginals' model
   . Codec.encodeSent codec
   $ sent
   where
@@ -243,11 +262,11 @@ marginals CRF{..} sent
 
 
 -- | Tag labels with marginal probabilities.
-probs :: (Ord a, Ord b) => Inf.ProbType -> CRF a b -> Sent a b -> SentL a b
+probs :: (Ord a, Ord b) => I.ProbType -> CRF a b -> Sent a b -> SentL a b
 probs probTyp CRF{..} sent
   = fmap decodeChosen
   . DAG.zipE sent
-  . Inf.probs' probTyp model
+  . I.probs' probTyp model
   . Codec.encodeSent codec
   $ sent
   where

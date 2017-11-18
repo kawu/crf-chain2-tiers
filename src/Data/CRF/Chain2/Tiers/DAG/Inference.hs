@@ -15,6 +15,16 @@ module Data.CRF.Chain2.Tiers.DAG.Inference
 , expectedFeaturesIn
 , zx
 , zx'
+
+-- * Internals (used by `Probs`) (TODO: move elsewhere)
+, AccF
+, ProbArray
+, Pos (..)
+, simplify
+, complicate
+-- ** Memoization
+, memoProbArray
+, memoEdgeIx
 ) where
 
 
@@ -85,13 +95,13 @@ type ProbArray = Pos -> Pos -> L.LogFloat
 ---------------------------------------------
 
 
-memoProbArray :: DAG a X -> ProbArray -> ProbArray
+memoProbArray :: DAG a b -> ProbArray -> ProbArray
 memoProbArray dag =
   let memo = memoPos dag
   in  Memo.memo2 memo memo
 
 
-memoPos :: DAG a X -> Memo.Memo Pos
+memoPos :: DAG a b -> Memo.Memo Pos
 memoPos dag f =
   table (f Beg) (memo (f . Mid)) (f End)
   where
@@ -101,7 +111,7 @@ memoPos dag f =
     table b m e End = e
 
 
-memoEdgeIx :: DAG a X -> Memo.Memo EdgeIx
+memoEdgeIx :: DAG a b -> Memo.Memo EdgeIx
 memoEdgeIx dag =
   Memo.wrap fromPair toPair memoPair
   where

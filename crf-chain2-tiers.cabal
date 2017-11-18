@@ -54,6 +54,7 @@ library
       , Data.CRF.Chain2.Tiers.DAG.Dataset.External
       , Data.CRF.Chain2.Tiers.DAG.Dataset.Codec
       , Data.CRF.Chain2.Tiers.DAG.Inference
+      , Data.CRF.Chain2.Tiers.DAG.Probs
 
     other-modules:
         Data.CRF.Chain2.Tiers.Util
