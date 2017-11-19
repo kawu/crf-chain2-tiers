@@ -31,6 +31,7 @@ module Data.CRF.Chain2.Tiers.DAG
 
 
 import           Control.Applicative ((<$>), (<*>))
+import           Control.Monad (when)
 
 import           System.IO (hSetBuffering, stdout, BufferMode (..))
 import           Data.Maybe (maybeToList)
@@ -120,7 +121,16 @@ train numOfLayers featSel sgdArgs onDisk trainIO evalIO = do
     -- Create codec and encode the training dataset
     codec <- Codec.mkCodec numOfLayers    <$> trainIO
     trainData_ <- Codec.encodeDataL codec <$> trainIO
-    SGD.withData onDisk trainData_ $ \trainData -> do
+    let trainLenOld = length trainData_
+        trainData0 = verifyDataset trainData_
+        trainLenNew = length trainData0
+    -- mapM_ print $ map dagProb trainData_
+    when (trainLenNew < trainLenOld) $ do
+      putStrLn $ "Discarded "
+        ++ show (trainLenOld - trainLenNew) ++ "/" ++ show trainLenOld
+        ++  " elements from the training dataset"
+    SGD.withData onDisk trainData0 $ \trainData -> do
+    -- SGD.withData onDisk trainData_ $ \trainData -> do
 
     -- Encode the evaluation dataset
     evalData_ <- Codec.encodeDataL codec <$> evalIO
@@ -226,6 +236,44 @@ notify SGD.SgdArgs{..} model trainData evalData para k
         = fromIntegral (i * batchSize)
         / fromIntegral trainSize
     trainSize = SGD.size trainData
+
+------------------------------------------------------
+-- Verification
+--
+-- TODO: virtually the same computation as in the
+-- `crf-chain1-constarined` library!
+------------------------------------------------------
+
+
+-- | Compute the probability of the DAG, based on the probabilities assigned to
+-- different edges and their labels.
+dagProb :: DAG a (X, Y) -> Double
+dagProb dag = sum
+  [ fromEdge edgeID
+  | edgeID <- DAG.dagEdges dag
+  , DAG.isInitialEdge edgeID dag ]
+  where
+    fromEdge edgeID
+      = edgeProb edgeID
+      * fromNode (DAG.endsWith edgeID dag)
+    edgeProb edgeID =
+      let (_x, y) = DAG.edgeLabel edgeID dag
+      in  sum . map (LogFloat.fromLogFloat . snd) $ Core.unY y
+    fromNode nodeID =
+      case DAG.outgoingEdges nodeID dag of
+        [] -> 1
+        xs -> sum (map fromEdge xs)
+
+
+-- | Filter out the sentences with `dagProb` < 1.
+verifyDataset :: [DAG a (X, Y)] -> [DAG a (X, Y)]
+verifyDataset =
+  filter verify
+  where
+    verify dag =
+      let p = dagProb dag
+      in  p >= 1 - eps && p <= 1 + eps
+    eps = 1e-9
 
 
 ----------------------------------------------------

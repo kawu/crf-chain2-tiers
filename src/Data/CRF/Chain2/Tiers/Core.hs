@@ -204,8 +204,8 @@ lbAt x = (_unR x V.!)
 {-# INLINE lbAt #-}
 
 
--- | Vector of chosen labels together with
--- corresponding probabilities in log domain.
+-- | Vector of chosen labels together with corresponding probabilities in log
+-- domain.
 newtype Y = Y { _unY :: V.Vector (Cb, Double) }
     deriving (Show, Eq, Ord, Binary)
 
