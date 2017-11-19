@@ -265,7 +265,7 @@ dagProb dag = sum
         xs -> sum (map fromEdge xs)
 
 
--- | Filter out the sentences with `dagProb` < 1.
+-- | Filter out sentences with `dagProb` different from 1.
 verifyDataset :: [DAG a (X, Y)] -> [DAG a (X, Y)]
 verifyDataset =
   filter verify
