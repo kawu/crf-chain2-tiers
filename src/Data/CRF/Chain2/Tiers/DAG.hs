@@ -42,6 +42,7 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Number.LogFloat as LogFloat
 import qualified Numeric.SGD.Momentum as SGD
 import qualified Numeric.SGD.LogSigned as L
+import qualified Data.MemoCombinators as Memo
 
 import           Data.DAG (DAG)
 import qualified Data.DAG as DAG
@@ -239,9 +240,6 @@ notify SGD.SgdArgs{..} model trainData evalData para k
 
 ------------------------------------------------------
 -- Verification
---
--- TODO: virtually the same computation as in the
--- `crf-chain1-constarined` library!
 ------------------------------------------------------
 
 
@@ -253,7 +251,9 @@ dagProb dag = sum
   | edgeID <- DAG.dagEdges dag
   , DAG.isInitialEdge edgeID dag ]
   where
-    fromEdge edgeID
+    fromEdge =
+      Memo.wrap DAG.EdgeID DAG.unEdgeID Memo.integral fromEdge'
+    fromEdge' edgeID
       = edgeProb edgeID
       * fromNode (DAG.endsWith edgeID dag)
     edgeProb edgeID =
