@@ -3,7 +3,7 @@
 
 
 module Data.CRF.Chain2.Tiers
-( 
+(
 -- * CRF
   CRF (..)
 , size

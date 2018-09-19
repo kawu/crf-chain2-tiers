@@ -1,5 +1,6 @@
 module Data.CRF.Chain2.Tiers.Dataset.Codec
 ( Codec
+, empty
 , CodecM
 , obMax
 , lbMax
@@ -27,6 +28,7 @@ module Data.CRF.Chain2.Tiers.Dataset.Codec
 ) where
 
 
+import Prelude hiding (Word)
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.Comonad.Store (store)
 import Data.Maybe (catMaybes, fromJust)

@@ -10,6 +10,7 @@ module Data.CRF.Chain2.Tiers.Dataset.External
 , SentL
 ) where
 
+import Prelude hiding (Word)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
@@ -37,17 +38,29 @@ type Sent a b = [Word a b]
 newtype Prob a = Prob { unProb :: M.Map a Double }
     deriving (Show, Eq, Ord)
 
+-- -- | Construct the probability distribution.
+-- mkProb :: Ord a => [(a, Double)] -> Prob a
+-- mkProb =
+--     Prob . normalize . M.fromListWith (+) . filter ((>0).snd)
+--   where
+--     normalize dist
+--         | M.null dist =
+--             error "mkProb: no elements with positive probability"
+--         | otherwise   =
+--             let z = sum (M.elems dist)
+--             in  fmap (/z) dist
+
 -- | Construct the probability distribution.
+--
+-- Normalization is not performed because, when working with DAGs, the
+-- probability of a specific DAG edge can be lower than 1 (in particular, it can
+-- be 0).
+--
+-- Elements with probability 0 cab be filtered out since information that a
+-- given label is a potential interpretation of the given word/edge is preserved
+-- at the level of the `Word`
 mkProb :: Ord a => [(a, Double)] -> Prob a
-mkProb =
-    Prob . normalize . M.fromListWith (+) . filter ((>0).snd)
-  where
-    normalize dist 
-        | M.null dist =
-            error "mkProb: no elements with positive probability"
-        | otherwise   =
-            let z = sum (M.elems dist)
-            in  fmap (/z) dist
+mkProb = Prob . M.fromListWith (+) . filter ((>0).snd)
 
 -- | A WordL is a labeled word, i.e. a word with probability distribution
 -- defined over labels.  We assume that every label from the distribution

@@ -17,8 +17,6 @@ module Data.CRF.Chain2.Tiers.Model
 -- * Potential
 , phi
 , index
-, onWord
-, onTransition
 ) where
 
 
@@ -312,19 +310,3 @@ phi Model{..} ft = case featIndex ft featMap of
 index :: Model -> Feat -> Maybe FeatIx
 index Model{..} ft = featIndex ft featMap
 {-# INLINE index #-}
-
-
--- | Observation potential on a given position and a
--- given label (identified by index).
-onWord :: Model -> Xs -> Int -> CbIx -> L.LogFloat
-onWord crf xs i u =
-    product . map (phi crf) $ obFeatsOn xs i u
-{-# INLINE onWord #-}
-
-
--- | Transition potential on a given position and a
--- given labels (identified by indexes).
-onTransition :: Model -> Xs -> Int -> CbIx -> CbIx -> CbIx -> L.LogFloat
-onTransition crf xs i u w v =
-    product . map (phi crf) $ trFeatsOn xs i u w v
-{-# INLINE onTransition #-}
