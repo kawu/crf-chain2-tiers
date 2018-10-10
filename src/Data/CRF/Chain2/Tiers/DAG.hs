@@ -15,7 +15,7 @@ module Data.CRF.Chain2.Tiers.DAG
 -- , reTrain
 
 -- * Tagging
--- , tag
+, tag
 , marginals
 , I.ProbType (..)
 , probs
@@ -30,6 +30,7 @@ module Data.CRF.Chain2.Tiers.DAG
 ) where
 
 
+import           Prelude hiding (Word)
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad (when)
 
@@ -281,16 +282,17 @@ verifyDataset =
 ----------------------------------------------------
 
 
--- -- | Find the most probable label sequence.
--- tag :: (Ord a, Ord b) => CRF a b -> Sent a b -> [[b]]
--- tag CRF{..} sent
---     = onWords . decodeLabels codec
---     . I.tag model . encodeSent codec
---     $ sent
---   where
---     onWords xs =
---         [ unJust codec word x
---         | (word, x) <- zip sent xs ]
+-- | Find the most probable labeled path.
+tag :: (Ord a, Ord b) => CRF a b -> Sent a b -> DAG () (Maybe [b])
+tag CRF{..} sent
+  = fmap decodeChosen
+  . DAG.zipE sent
+  . I.fastTag' model
+  . Codec.encodeSent codec
+  $ sent
+  where
+    decodeChosen (word, chosen) = decode word <$> chosen
+    decode word = Codec.unJust codec word . Codec.decodeLabel codec
 
 
 -- | Tag labels with marginal probabilities.
