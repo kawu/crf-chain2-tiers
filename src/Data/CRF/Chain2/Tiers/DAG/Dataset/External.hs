@@ -6,7 +6,7 @@ module Data.CRF.Chain2.Tiers.DAG.Dataset.External
 
 
 import Prelude hiding (Word)
-import qualified Data.DAG as DAG
+-- import qualified Data.DAG as DAG
 import           Data.DAG (DAG)
 
 import           Data.CRF.Chain2.Tiers.Dataset.External hiding (Sent, SentL)

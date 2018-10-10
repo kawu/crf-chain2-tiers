@@ -37,8 +37,8 @@ import qualified Control.Parallel as Par
 import qualified Control.Parallel.Strategies as Par
 
 import qualified Data.Number.LogFloat as L
-import qualified Data.Vector as V
-import qualified Data.Array as A
+-- import qualified Data.Vector as V
+-- import qualified Data.Array as A
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import           Data.Maybe (fromJust)
@@ -109,9 +109,9 @@ memoPos dag f =
   table (f Beg) (memo (f . Mid)) (f End)
   where
     memo = memoEdgeIx dag
-    table b m e Beg = b
-    table b m e (Mid x) = m x
-    table b m e End = e
+    table b _ _ Beg = b
+    table _ m _ (Mid x) = m x
+    table _ _ e End = e
 
 
 memoEdgeIx :: DAG a b -> Memo.Memo EdgeIx
@@ -203,7 +203,7 @@ argmax _def (x:xs) =
     go k v ((k', v') : rest)
       | v >= v' = go k v rest
       | otherwise = go k' v' rest
-    go k v [] = k
+    go k _ [] = k
 argmax def [] = def
 {-# INLINE argmax #-}
 
@@ -569,7 +569,7 @@ goodAndBad' crf dataset =
 accuracy :: Md.Model -> [DAG a (X, Y)] -> Double
 accuracy crf dataset =
     let k = numCapabilities
-    	parts = partition k dataset
+        parts = partition k dataset
         xs = Par.parMap Par.rseq (goodAndBad' crf) parts
         (good, bad) = F.foldl' add (0, 0) xs
         add (g, b) (g', b') = (g + g', b + b')

@@ -58,7 +58,7 @@ import           Data.CRF.Chain2.Tiers.DAG.Dataset.External
 import qualified Data.CRF.Chain2.Tiers.DAG.Dataset.Codec as Codec
 import           Data.CRF.Chain2.Tiers.DAG.Dataset.Codec (Codec)
 import qualified Data.CRF.Chain2.Tiers.DAG.Feature as Feat
-import           Data.CRF.Chain2.Tiers.DAG.Feature (Feat, FeatSel)
+import           Data.CRF.Chain2.Tiers.DAG.Feature (Feat)
 import qualified Data.CRF.Chain2.Tiers.DAG.Inference as I
 import qualified Data.CRF.Chain2.Tiers.DAG.Probs as P
 
@@ -205,8 +205,8 @@ notify SGD.SgdArgs{..} model trainData evalData para k
 --       report $ U.map (*0.1) para
   where
 
-    report para = do
-      let crf = model {Model.values = para}
+    report _para = do
+      let crf = model {Model.values = _para}
       llh <- show
         . LogFloat.logFromLogFloat
         . P.parLikelihood crf
@@ -216,8 +216,8 @@ notify SGD.SgdArgs{..} model trainData evalData para k
         then show . I.accuracy crf <$> SGD.loadData evalData
         else return "#"
       putStrLn $ "[" ++ show (doneTotal k) ++ "] stats:"
-      putStrLn $ "min(params) = " ++ show (U.minimum para)
-      putStrLn $ "max(params) = " ++ show (U.maximum para)
+      putStrLn $ "min(params) = " ++ show (U.minimum _para)
+      putStrLn $ "max(params) = " ++ show (U.maximum _para)
       putStrLn $ "log(likelihood(train)) = " ++ llh
       putStrLn $ "acc(eval) = " ++ acc
 

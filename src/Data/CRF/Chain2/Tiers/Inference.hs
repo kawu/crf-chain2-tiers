@@ -72,10 +72,10 @@ forward acc crf sent = alpha where
                 (\i   -> (0, lbNum sent i - 1))
                 (\i _ -> (0, lbNum sent (i - 1) - 1))
                 (\t i -> withMem (computePsi crf sent i) t i)
-    withMem psi alpha i j k
+    withMem psi _alpha i j k
         | i == -1 = 1.0
         | otherwise = acc
-            [ alpha (i - 1) k h * psi j
+            [ _alpha (i - 1) k h * psi j
             * onTransition crf sent i j k h
             | h <- lbIxs sent (i - 2) ]
 
@@ -85,10 +85,10 @@ backward acc crf sent = beta where
                (\i   -> (0, lbNum sent (i - 1) - 1))
                (\i _ -> (0, lbNum sent (i - 2) - 1))
                (\t i -> withMem (computePsi crf sent i) t i)
-    withMem psi beta i j k
+    withMem psi _beta i j k
         | i == V.length sent = 1.0
         | otherwise = acc
-            [ beta (i + 1) h j * psi h
+            [ _beta (i + 1) h j * psi h
             * onTransition crf sent i h j k
             | h <- lbIxs sent i ]
 
@@ -124,17 +124,17 @@ tagIxs crf sent = collectMaxArg (0, 0, 0) [] mem where
                        (\i   -> (0, lbNum sent (i - 1) - 1))
                        (\i _ -> (0, lbNum sent (i - 2) - 1))
                        (\t i -> withMem (computePsi crf sent i) t i)
-    withMem psiMem mem i j k
+    withMem psiMem _mem i j k
         | i == V.length sent = (-1, 1)
         | otherwise = argmax eval $ lbIxs sent i
         where eval h =
-                  (snd $ mem (i + 1) h j) * psiMem h
+                  (snd $ _mem (i + 1) h j) * psiMem h
                   * onTransition crf sent i h j k
-    collectMaxArg (i, j, k) acc mem =
-        collect $ mem i j k
+    collectMaxArg (i, j, k) acc _mem =
+        collect $ _mem i j k
         where collect (h, _)
                   | h == -1 = reverse acc
-                  | otherwise = collectMaxArg (i + 1, h, j) (h:acc) mem
+                  | otherwise = collectMaxArg (i + 1, h, j) (h:acc) _mem
 
 -- | Find the most probable label sequence satisfying the constraints
 -- imposed over label values.

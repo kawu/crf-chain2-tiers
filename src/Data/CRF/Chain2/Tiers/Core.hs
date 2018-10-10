@@ -54,12 +54,12 @@ import           Data.Binary (Binary, put, get, putWord8, getWord8)
 import           Data.Ix (Ix)
 import           Data.Int (Int16, Int32)
 import           Data.List (zip4)
-import qualified Data.Array.Unboxed as A
+-- import qualified Data.Array.Unboxed as A
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 import           Data.Vector.Unboxed.Deriving
-import qualified Data.Vector.Generic.Base as G
-import qualified Data.Vector.Generic.Mutable as G
+-- import qualified Data.Vector.Generic.Base as G
+-- import qualified Data.Vector.Generic.Mutable as G
 import qualified Data.Number.LogFloat as L
 -- import qualified Data.Primitive.ByteArray as BA
 

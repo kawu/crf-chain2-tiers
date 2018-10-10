@@ -22,9 +22,9 @@ module Data.CRF.Chain2.Tiers.Feature
 ) where
 
 
-import           Control.Applicative ((<*>), (<$>))
+-- import           Control.Applicative ((<*>), (<$>))
 import           Data.Maybe (maybeToList)
-import           Data.Binary (Binary, put, get)
+-- import           Data.Binary (Binary, put, get)
 import qualified Data.Vector as V
 import qualified Data.Number.LogFloat as L
 

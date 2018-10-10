@@ -13,19 +13,19 @@ import           GHC.Conc (numCapabilities)
 
 import           Control.Applicative ((<$>))
 import qualified Control.Arrow as Arr
-import qualified Control.Parallel as Par
+-- import qualified Control.Parallel as Par
 import qualified Control.Parallel.Strategies as Par
 
 import qualified Data.Number.LogFloat as L
 import qualified Data.Vector as V
-import qualified Data.Vector.Unboxed as U
-import qualified Data.Array as A
-import qualified Data.Set as S
-import           Data.Maybe (fromJust, maybeToList)
-import qualified Data.MemoCombinators as Memo
-import qualified Data.List as List
-import           Data.Function (on)
-import qualified Data.Foldable as F
+-- import qualified Data.Vector.Unboxed as U
+-- import qualified Data.Array as A
+-- import qualified Data.Set as S
+import           Data.Maybe (maybeToList)
+-- import qualified Data.MemoCombinators as Memo
+-- import qualified Data.List as List
+-- import           Data.Function (on)
+-- import qualified Data.Foldable as F
 
 import           Data.DAG (EdgeID, DAG)
 import qualified Data.DAG as DAG
@@ -35,13 +35,13 @@ import           Data.CRF.Chain2.Tiers.Core (X, Y, Ob, Cb, CbIx)
 import qualified Data.CRF.Chain2.Tiers.Model as Md
 import           Data.CRF.Chain2.Tiers.Util (partition)
 import           Data.CRF.Chain2.Tiers.DAG.Feature (EdgeIx(..))
-import qualified Data.CRF.Chain2.Tiers.DAG.Feature as Ft
+-- import qualified Data.CRF.Chain2.Tiers.DAG.Feature as Ft
 
 import           Data.CRF.Chain2.Tiers.DAG.Inference
                  (AccF, Pos(..), simplify, complicate, ProbArray)
 import qualified Data.CRF.Chain2.Tiers.DAG.Inference as I
 
-import Debug.Trace (trace)
+-- import Debug.Trace (trace)
 
 
 --------------------------------------------
