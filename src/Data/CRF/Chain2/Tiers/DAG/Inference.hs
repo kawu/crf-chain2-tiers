@@ -185,13 +185,20 @@ rewind
   -> ProbArray -- ^ The forward probability table (pre-calculated with `max`)
   -> M.Map EdgeID CbIx -- ^ The optimal `EdgeIx`s
 rewind dag alpha =
+
   best M.empty End
+
   where
+
     best m u = pick m $ argmax Beg [(w, alpha u w) | w <- prev u]
+
     prev End = Mid <$> Ft.finalEdgeIxs dag
     prev (Mid u) = complicate Beg <$> Ft.prevEdgeIxs dag (Just $ edgeID u)
+    prev _ = error "DAG.Inference.rewind: impossible 1 happened"
+
     pick m (Mid u) = best (M.insert (edgeID u) (lbIx u) m) (Mid u)
     pick m Beg = m
+    pick _ _ = error "DAG.Inference.rewind: impossible 2 happened"
 
 
 -- | Return the key with the highest corresponding value, with a default value
