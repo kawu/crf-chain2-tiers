@@ -6,6 +6,8 @@ module Data.CRF.Chain2.Tiers.DAG.Inference
 ( tag
 , tag'
 , tagK
+, fastTag
+, fastTag'
 , marginals
 , marginals'
 , ProbType (..)
@@ -38,6 +40,7 @@ import qualified Data.Number.LogFloat as L
 import qualified Data.Vector as V
 import qualified Data.Array as A
 import qualified Data.Set as S
+import qualified Data.Map.Strict as M
 import           Data.Maybe (fromJust)
 import qualified Data.MemoCombinators as Memo
 import qualified Data.List as List
@@ -150,6 +153,59 @@ onTransition crf dag u w v
   . map (Md.phi crf)
   $ Ft.trFeatsOn dag u w v
 {-# INLINE onTransition #-}
+
+
+---------------------------------------------
+-- NEW STUFF
+---------------------------------------------
+
+
+-- | A version of `tag` which should be, roughly, twice as efficient, since it
+-- only performs one `forward` and no `backward` computation.  The downside is
+-- that probabilities cannot be retrieved.
+fastTag :: Md.Model -> DAG a X -> DAG a (Maybe CbIx)
+fastTag crf dag =
+  DAG.mapE label dag
+  where
+    label edgeID _ = M.lookup edgeID selSet
+    alpha = forward maximum crf dag
+    selSet = rewind dag alpha
+
+
+-- | Similar to `fastTag` but directly returns complex labels and not just
+-- their `CbIx` indexes.
+fastTag' :: Md.Model -> DAG a X -> DAG a (Maybe Cb)
+fastTag' crf dag
+  = fmap (\(x, mayIx) -> C.lbAt x <$> mayIx)
+  $ DAG.zipE dag (fastTag crf dag)
+
+
+rewind
+  :: DAG a X   -- ^ The input DAG
+  -> ProbArray -- ^ The forward probability table (pre-calculated with `max`)
+  -> M.Map EdgeID CbIx -- ^ The optimal `EdgeIx`s
+rewind dag alpha =
+  best M.empty End
+  where
+    best m u = pick m $ argmax Beg [(w, alpha u w) | w <- prev u]
+    prev End = Mid <$> Ft.finalEdgeIxs dag
+    prev (Mid u) = complicate Beg <$> Ft.prevEdgeIxs dag (Just $ edgeID u)
+    pick m (Mid u) = best (M.insert (edgeID u) (lbIx u) m) (Mid u)
+    pick m Beg = m
+
+
+-- | Return the key with the highest corresponding value, with a default value
+-- for the empty list.
+argmax :: Ord v => k -> [(k, v)] -> k
+argmax _def (x:xs) =
+  go (fst x) (snd x) xs
+  where
+    go k v ((k', v') : rest)
+      | v >= v' = go k v rest
+      | otherwise = go k' v' rest
+    go k v [] = k
+argmax def [] = def
+{-# INLINE argmax #-}
 
 
 ---------------------------------------------
