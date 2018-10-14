@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module Data.CRF.Chain2.Tiers.DAG.Inference
@@ -88,9 +89,13 @@ complicate df Nothing = df
 complicate _ (Just x) = Mid x
 
 
--- | First argument represents the current EdgeIx (Nothing if out of bounds),
--- the next argument represents the previous EdgeIx.
-type ProbArray = Pos -> Pos -> L.LogFloat
+-- | The first argument represents the current EdgeIx, the second argument
+-- represents the previous EdgeIx.
+type PosArray a = Pos -> Pos -> a
+
+
+-- | Array with probabilities.
+type ProbArray = PosArray L.LogFloat
 
 
 ---------------------------------------------
@@ -98,7 +103,8 @@ type ProbArray = Pos -> Pos -> L.LogFloat
 ---------------------------------------------
 
 
-memoProbArray :: DAG a b -> ProbArray -> ProbArray
+-- memoProbArray :: DAG a b -> ProbArray -> ProbArray
+memoProbArray :: DAG a b -> PosArray c -> PosArray c
 memoProbArray dag =
   let memo = memoPos dag
   in  Memo.memo2 memo memo
@@ -168,8 +174,8 @@ fastTag crf dag =
   DAG.mapE label dag
   where
     label edgeID _ = M.lookup edgeID selSet
-    alpha = forward maximum crf dag
-    selSet = rewind dag alpha
+    alpha = forward' argmax crf dag
+    selSet = rewind' alpha
 
 
 -- | Similar to `fastTag` but directly returns complex labels and not just
@@ -180,38 +186,67 @@ fastTag' crf dag
   $ DAG.zipE dag (fastTag crf dag)
 
 
-rewind
-  :: DAG a X   -- ^ The input DAG
-  -> ProbArray -- ^ The forward probability table (pre-calculated with `max`)
-  -> M.Map EdgeID CbIx -- ^ The optimal `EdgeIx`s
-rewind dag alpha =
+-- | Generic accumulation function.
+type Acc a = [a] -> a
 
-  best M.empty End
+
+-- | Forward table computation.
+forward'
+  :: Acc (Pos, L.LogFloat)
+  -> Md.Model
+  -> DAG a X
+  -> PosArray (Pos, L.LogFloat)
+forward' acc crf dag =
+  alpha
+  where
+    alpha = memoProbArray dag alpha'
+    alpha' Beg Beg = (Beg, 1.0)
+    alpha' End End = acc
+      [ (Mid w,) $ snd (alpha End (Mid w))
+          -- below, onTransition equals currently to 1; in general, there could be
+          -- some related transition features, though.
+          * onTransition crf dag Nothing Nothing (Just w)
+      | w <- Ft.finalEdgeIxs dag ]
+    alpha' u v = acc
+      [ (w,) $ snd (alpha v w)
+          * psi' u
+          * onTransition crf dag (simplify u) (simplify v) (simplify w)
+      | w <- complicate Beg <$> Ft.prevEdgeIxs dag (edgeID <$> simplify v) ]
+    psi' u = case u of
+      Mid x -> psi x
+      _ -> 1.0
+    psi = memoEdgeIx dag $ onWord crf dag
+
+
+rewind'
+  :: PosArray (Pos, L.LogFloat)
+    -- ^ The forward probability table (pre-calculated with `max`)
+  -> M.Map EdgeID CbIx
+    -- ^ The optimal `EdgeIx`s
+rewind' alpha =
+
+  best M.empty End End
 
   where
 
-    best m u = pick m $ argmax Beg [(w, alpha u w) | w <- prev u]
+    best m u v = pick m v . fst $ alpha u v
 
-    prev End = Mid <$> Ft.finalEdgeIxs dag
-    prev (Mid u) = complicate Beg <$> Ft.prevEdgeIxs dag (Just $ edgeID u)
-    prev _ = error "DAG.Inference.rewind: impossible 1 happened"
-
-    pick m (Mid u) = best (M.insert (edgeID u) (lbIx u) m) (Mid u)
-    pick m Beg = m
-    pick _ _ = error "DAG.Inference.rewind: impossible 2 happened"
+    pick m v (Mid w) = best (M.insert (edgeID w) (lbIx w) m) v (Mid w)
+    pick m _ Beg = m
+    pick _ _ _ = error "DAG.Inference.rewind: impossible happened"
 
 
 -- | Return the key with the highest corresponding value, with a default value
 -- for the empty list.
-argmax :: Ord v => k -> [(k, v)] -> k
-argmax _def (x:xs) =
+argmax :: Ord v => [(k, v)] -> (k, v)
+argmax (x:xs) =
   go (fst x) (snd x) xs
   where
     go k v ((k', v') : rest)
       | v >= v' = go k v rest
       | otherwise = go k' v' rest
-    go k _ [] = k
-argmax def [] = def
+    go k v [] = (k, v)
+argmax [] = error "DAG.Inference.argmax: empty list"
 {-# INLINE argmax #-}
 
 
